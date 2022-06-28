@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package protos.log;
+
+import 'protos/api.proto';
+
+message LogEntry {
+  uint32 log_index = 1;
+  oneof data {
+    uint32 commit_index = 2;
+    PutArgs put_args = 3;
+  }
+}
