@@ -3,7 +3,7 @@
 
 #include <optional>
 
-#include "storage/engine.h"
+#include "storage/engine.hpp"
 
 namespace flashpoint {
 

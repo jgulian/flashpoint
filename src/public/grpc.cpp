@@ -1,4 +1,4 @@
-#include "public/grpc.h"
+#include "public/grpc.hpp"
 
 #include <utility>
 

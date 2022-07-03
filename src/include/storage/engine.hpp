@@ -5,7 +5,7 @@
 
 #include <unordered_map>
 
-#include "storage/document.h"
+#include "storage/document.hpp"
 
 namespace flashpoint {
 

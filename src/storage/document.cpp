@@ -1,5 +1,5 @@
 
-#include "storage/document.h"
+#include "storage/document.hpp"
 
 #include <utility>
 

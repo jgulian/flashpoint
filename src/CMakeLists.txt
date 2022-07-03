@@ -3,9 +3,18 @@ target_sources(
         flashpoint_lib
         PRIVATE
 
+        containers/channel.cpp
+
         public/grpc.cpp
 
+        raft/clerk.cpp
+        raft/peer.cpp
+        raft/protocol.cpp
         raft/raft.cpp
+        raft/state.cpp
+        raft/util.cpp
+
+        raft/protocols/grpc.cpp
 
         storage/document.cpp
 
@@ -13,6 +22,8 @@ target_sources(
         storage/engines/logger_engine.cpp
         storage/engines/proto_engine.cpp
         storage/engines/raft_clerk_engine.cpp
+
+        util/thread_pool.cpp
 )
 target_sources(
         flashpoint

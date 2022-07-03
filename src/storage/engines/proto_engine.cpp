@@ -1,4 +1,4 @@
-#include "storage/engines/proto_engine.h"
+#include "storage/engines/proto_engine.hpp"
 
 namespace flashpoint {
 

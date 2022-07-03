@@ -6,7 +6,7 @@
 #include <protos/api.pb.h>
 #include <protos/log.pb.h>
 
-#include "storage/engine.h"
+#include "storage/engine.hpp"
 
 namespace flashpoint {
 

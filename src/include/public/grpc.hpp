@@ -1,14 +1,12 @@
-#ifndef FLASHPOINTDB_PUBLIC_GRPC_H_
-#define FLASHPOINTDB_PUBLIC_GRPC_H_
-
-#include <json/json.h>
+#ifndef FLASHPOINT_SRC_INCLUDE_PUBLIC_GRPC_HPP
+#define FLASHPOINT_SRC_INCLUDE_PUBLIC_GRPC_HPP
 
 #include <grpc/grpc.h>
 #include <grpcpp/server_builder.h>
 
 #include <protos/api.grpc.pb.h>
 
-#include "storage/engine.h"
+#include "storage/engine.hpp"
 
 namespace flashpoint {
 
@@ -41,4 +39,4 @@ class PublicKeyValueApiServer {
 
 }
 
-#endif //FLASHPOINTDB_PUBLIC_GRPC_H_
+#endif // FLASHPOINT_SRC_INCLUDE_PUBLIC_GRPC_HPP

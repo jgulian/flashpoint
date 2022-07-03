@@ -5,28 +5,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_MACOSX_RPATH 1)
-#set(ABSL_PROPAGATE_CXX_STD ON)
-
-#include(FetchContent)
-
-#FetchContent_Declare(
-#        jsoncpp
-#        GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
-#        GIT_TAG        master
-#)
-#FetchContent_MakeAvailable(jsoncpp)
 
 add_library(flashpoint_lib)
 add_executable(flashpoint)
 add_subdirectory(src)
 
+add_executable(flashpoint_test)
+add_subdirectory(test)
+
 find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(Threads)
 
-#
-# Protobuf/Grpc source files
-#
 set(PROTO_FILES
         protos/api.proto
         protos/raft.proto
@@ -48,9 +38,6 @@ get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
 protobuf_generate(TARGET proto LANGUAGE cpp)
 protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
 
-#
-#
-#
 target_link_libraries(flashpoint_lib proto)
 target_link_libraries(flashpoint flashpoint_lib)
 

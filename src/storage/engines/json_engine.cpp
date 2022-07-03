@@ -1,4 +1,4 @@
-#include "storage/engines/json_engine.h"
+#include "storage/engines/json_engine.hpp"
 
 namespace flashpoint {
 /*

@@ -1,9 +1,9 @@
 #ifndef FLASHPOINTDB_RAFT_CLERK_ENGINE_H_
 #define FLASHPOINTDB_RAFT_CLERK_ENGINE_H_
 
-#include "storage/engine.h"
+#include "storage/engine.hpp"
 
- namespace flashpoint {
+namespace flashpoint {
 
 class RaftClerkEngine : public Engine {
  public:

@@ -1,7 +1,7 @@
 #ifndef FLASHPOINTDB_STORAGE_ENGINES_JSON_ENGINE_H_
 #define FLASHPOINTDB_STORAGE_ENGINES_JSON_ENGINE_H_
 
-#include "storage/engine.h"
+#include "storage/engine.hpp"
 
 namespace flashpoint {
 
