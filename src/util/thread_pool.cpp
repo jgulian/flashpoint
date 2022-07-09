@@ -11,15 +11,6 @@ ThreadPool::~ThreadPool() {
     thread.join();
 }
 
-template <typename F, typename... A, typename R>
-std::promise<R> ThreadPool::newTask(F f, A... a) {
-  std::promise<R> promise;
-  channel_.write([&](){
-    promise.set_value(F(a...));
-  });
-  return promise;
-}
-
 void ThreadPool::worker() {
   auto task = channel_.read();
   task();

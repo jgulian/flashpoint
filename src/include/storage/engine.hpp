@@ -1,8 +1,6 @@
 #ifndef FLASHPOINTDB_STORAGE_ENGINE_H_
 #define FLASHPOINTDB_STORAGE_ENGINE_H_
 
-#include <json/json.h>
-
 #include <unordered_map>
 
 #include "storage/document.hpp"

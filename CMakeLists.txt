@@ -10,9 +10,6 @@ add_library(flashpoint_lib)
 add_executable(flashpoint)
 add_subdirectory(src)
 
-add_executable(flashpoint_test)
-add_subdirectory(test)
-
 find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(Threads)
@@ -30,7 +27,6 @@ target_link_libraries(proto
         protobuf::libprotobuf
         gRPC::grpc
         gRPC::grpc++
-        jsoncpp_lib
         )
 target_include_directories(proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -40,5 +36,9 @@ protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grp
 
 target_link_libraries(flashpoint_lib proto)
 target_link_libraries(flashpoint flashpoint_lib)
+
+add_executable(flashpoint_test)
+add_subdirectory(test)
+target_link_libraries(flashpoint_test PUBLIC flashpoint_lib)
 
 add_executable(playground main.cpp)

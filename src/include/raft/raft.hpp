@@ -1,7 +1,9 @@
 #ifndef FLASHPOINT_RAFT_RAFT_H_
 #define FLASHPOINT_RAFT_RAFT_H_
 
+#include <memory>
 #include <queue>
+#include <set>
 #include <thread>
 #include <type_traits>
 #include <unordered_set>
@@ -10,7 +12,6 @@
 #include "util/thread_pool.hpp"
 
 #include "containers/channel.hpp"
-#include "raft/protocol.hpp"
 #include "raft/state.hpp"
 
 namespace flashpoint::raft {
@@ -20,18 +21,68 @@ constexpr auto ElectionTimeout = 1000ms;
 constexpr auto MinSleepTime = 200ms;
 constexpr auto MaxSleepTime = 500ms;
 
-class Clerk;
+class Raft {
+ public:
+  explicit Raft(std::function<void(const std::string &)> do_command);
 
-template <typename P, std::enable_if_t<std::is_base_of_v<Protocol, P>>> class Raft {
-public:
+  ~Raft();
+
   void kill();
 
-private:
+  void forceKill();
+
+
+
+  std::pair<LogIndex, bool> start(const std::string &data);
+
+  bool snapshot(LogIndex last_included_index, const std::string &snapshot);
+
+ protected:
+  virtual bool appendEntries(PeerId peer_id,
+                             const AppendEntriesRequest &request,
+                             AppendEntriesResponse &response) = 0;
+
+  virtual bool installSnapshot(PeerId peer_id,
+                               const InstallSnapshotRequest &request,
+                               InstallSnapshotResponse &response) = 0;
+
+  virtual bool requestVote(PeerId peer_id, const RequestVoteRequest &request,
+                           RequestVoteResponse &response) = 0;
+
+
+
+  virtual void registerPeer(PeerId peer_id, std::string peer_data) = 0;
+
+  virtual void unregisterPeer(PeerId peer_id) = 0;
+
+  std::pair<LogIndex, bool> startPeer(PeerId peer_id, std::string data);
+
+
+
+  void receiveAppendEntries(const AppendEntriesRequest &request,
+                            AppendEntriesResponse &response);
+
+  void receiveInstallSnapshot(const InstallSnapshotRequest &request,
+                              InstallSnapshotResponse &response);
+
+  void receiveRequestVote(const RequestVoteRequest &request,
+                          RequestVoteResponse &response);
+
+ private:
   void worker();
+
   void leaderWorker();
+
   void leaderElection();
 
+
+  std::optional<bool> updateFollower(const PeerId &peer_id);
+
+  void raiseCommitIndex();
+
   void commitEntries();
+
+
 
   Random random_;
 
@@ -39,12 +90,9 @@ private:
   std::thread thread_, leader_thread_;
   util::ThreadPool thread_pool_ = util::ThreadPool(4);
 
-  State state_;
-  Service service_;
-  std::unordered_map<PeerId, Peer> peers_;
-  std::list<std::reference_wrapper<Clerk>> clerks_;
+  std::function<void(const std::string &)> do_command_;
+  State state_ = {};
 };
-
 } // namespace flashpoint::raft
 
 #endif // FLASHPOINT_RAFT_RAFT_H_

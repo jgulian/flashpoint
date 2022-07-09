@@ -7,14 +7,11 @@ target_sources(
 
         public/grpc.cpp
 
-        raft/clerk.cpp
-        raft/peer.cpp
-        raft/protocol.cpp
         raft/raft.cpp
         raft/state.cpp
         raft/util.cpp
 
-        raft/protocols/grpc.cpp
+        raft/grpc.cpp
 
         storage/document.cpp
 

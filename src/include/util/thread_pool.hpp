@@ -18,8 +18,19 @@ public:
   explicit ThreadPool(int thread_count);
   ~ThreadPool();
 
-  template <typename F, typename... A, typename R = std::result_of<F(A...)>>
-  std::promise<R> newTask(F, A...);
+  template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
+  std::promise<R> newTask(const F& f, const A& ...a) {
+    std::promise<R> promise;
+    channel_.write([&promise, f, a...](){
+      if constexpr (std::is_void_v<R>) {
+        f(a...);
+        promise.set_value();
+      } else {
+        promise.set_value(f(a...));
+      }
+    });
+    return promise;
+  }
 
 private:
   void worker();

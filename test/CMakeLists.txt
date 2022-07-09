@@ -6,4 +6,5 @@ target_sources(
         main.cpp
 
         raft/cluster.cpp
+        raft/in_memory.cpp
 )

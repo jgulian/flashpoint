@@ -11,9 +11,4 @@ float Random::randomUnitUniform() {
   return unit_uniform_distribution_(random_number_generator_);
 }
 
-template <class Duration>
-Duration Random::randomDurationBetween(Duration min, Duration max) {
-  return min + (max - min) * randomUnitUniform();
-}
-
 }
