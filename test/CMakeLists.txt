@@ -1,3 +1,4 @@
+
 target_include_directories(flashpoint_test PUBLIC include)
 target_sources(
         flashpoint_test
@@ -5,6 +6,6 @@ target_sources(
 
         main.cpp
 
-        raft/cluster.cpp
         raft/in_memory.cpp
+        raft/leader_election.cpp
 )

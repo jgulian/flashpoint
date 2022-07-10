@@ -7,18 +7,19 @@ PeerId State::me() const { return me_; }
 
 LogTerm State::getCurrentTerm() const { return current_term_; }
 
-void State::setCurrentTerm(LogTerm current_term) {
-
-  current_term_ = current_term;
-}
+void State::setCurrentTerm(LogTerm current_term) {current_term_ = current_term;}
 
 std::optional<PeerId> State::getVotedFor() const { return voted_for_; }
 
-void State::setVotedFor(std::optional<PeerId> voted_for) { voted_for_ = voted_for; }
+void State::setVotedFor(std::optional<PeerId> voted_for) { voted_for_ = std::move(voted_for); }
 
 Role State::getRole() const { return role_; }
 
 void State::setRole(Role role) { role_ = role; }
+
+const PeerId &State::getLeaderId() const {return leader_id_;}
+
+void State::setLeaderId(const PeerId &leader_id) {leader_id_ = leader_id;}
 
 
 

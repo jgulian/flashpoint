@@ -23,7 +23,7 @@ constexpr auto MaxSleepTime = 500ms;
 
 class Raft {
  public:
-  explicit Raft(std::function<void(const std::string &)> do_command);
+  explicit Raft(const std::function<void(std::string)> &do_command);
 
   ~Raft();
 
@@ -37,25 +37,32 @@ class Raft {
 
   bool snapshot(LogIndex last_included_index, const std::string &snapshot);
 
+  std::pair<LogTerm, bool> getState() const;
+
+  PeerId getId();
+
+  PeerId getLeaderId();
+
  protected:
-  virtual bool appendEntries(PeerId peer_id,
+
+  virtual bool appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
                              AppendEntriesResponse &response) = 0;
 
-  virtual bool installSnapshot(PeerId peer_id,
+  virtual bool installSnapshot(const PeerId &peer_id,
                                const InstallSnapshotRequest &request,
                                InstallSnapshotResponse &response) = 0;
 
-  virtual bool requestVote(PeerId peer_id, const RequestVoteRequest &request,
+  virtual bool requestVote(const PeerId &peer_id, const RequestVoteRequest &request,
                            RequestVoteResponse &response) = 0;
 
 
 
-  virtual void registerPeer(PeerId peer_id, std::string peer_data) = 0;
+  virtual void registerPeer(const PeerId &peer_id, std::string peer_data) = 0;
 
-  virtual void unregisterPeer(PeerId peer_id) = 0;
+  virtual void unregisterPeer(const PeerId &peer_id) = 0;
 
-  std::pair<LogIndex, bool> startPeer(PeerId peer_id, std::string data);
+  std::pair<LogIndex, bool> startPeer(PeerId &peer_id, std::string data);
 
 
 
@@ -90,7 +97,7 @@ class Raft {
   std::thread thread_, leader_thread_;
   util::ThreadPool thread_pool_ = util::ThreadPool(4);
 
-  std::function<void(const std::string &)> do_command_;
+  std::function<void(std::string)> do_command_;
   State state_ = {};
 };
 } // namespace flashpoint::raft

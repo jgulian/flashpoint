@@ -2,18 +2,16 @@
 
 namespace flashpoint::raft {
 
-Raft::Raft(std::function<void(const std::string &)> do_command)
+Raft::Raft(const std::function<void(std::string)> &do_command)
     : do_command_(std::move(do_command)) {}
 
 Raft::~Raft() {
-
   forceKill();
 }
 
 void Raft::kill() { running_ = false; }
 
 void Raft::forceKill() {
-
   if (running_) {
     kill();
     leader_thread_.join();
@@ -22,7 +20,6 @@ void Raft::forceKill() {
 }
 
 std::pair<LogIndex, bool> Raft::start(const std::string &data) {
-
   auto write_lock = state_.acquireWriteLock();
   if (state_.getRole() != LEADER)
     return {0, false};
@@ -38,6 +35,27 @@ std::pair<LogIndex, bool> Raft::start(const std::string &data) {
 
   return {entry.index(), true};
 }
+
+bool Raft::snapshot(LogIndex last_included_index, const std::string &snapshot) {
+  return false;
+}
+
+std::pair<LogTerm, bool> Raft::getState() const {
+  auto read_lock = state_.acquireReadLock();
+  return {state_.getCurrentTerm(), state_.getRole() == LEADER};
+}
+
+PeerId Raft::getId() {
+  auto read_lock = state_.acquireReadLock();
+  return state_.me();
+}
+
+PeerId Raft::getLeaderId() {
+  auto read_lock = state_.acquireReadLock();
+  return state_.getLeaderId();
+}
+
+
 
 void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
                                 AppendEntriesResponse &response) {
@@ -120,7 +138,7 @@ void Raft::receiveRequestVote(const RequestVoteRequest &request,
   state_.setVotedFor(request.candidate_id());
 }
 
-std::pair<LogIndex, bool> Raft::startPeer(PeerId peer_id, std::string data) {
+std::pair<LogIndex, bool> Raft::startPeer(PeerId &peer_id, std::string data) {
   return std::pair<LogIndex, bool>();
 }
 
@@ -203,7 +221,7 @@ void Raft::leaderElection() {
 
   for (auto &peer_data : state_.getPeers()) {
     auto peer_id = peer_data.first;
-    thread_pool_.newTask([this, peer_id, &request, &channel]() {
+    thread_pool_.newTask([&]() {
       auto read_lock = state_.acquireReadLock();
 
       RequestVoteResponse response;
@@ -260,11 +278,12 @@ void Raft::commitEntries() {
       std::unordered_map<std::string, std::string> additions;
       std::unordered_set<std::string> removals;
       state_.configChanges(entry->get(), additions, removals);
-      for (const auto &[peer_id, peer_data] : additions)
-        registerPeer(peer_id, peer_data);
-      for (const auto &peer_id : removals)
+      for (auto [peer_id, peer_data] : additions)
+        registerPeer(peer_id, std::move(peer_data));
+      for (auto peer_id : removals)
         unregisterPeer(peer_id);
     }
   }
 }
+
 } // namespace flashpoint::raft

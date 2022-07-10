@@ -61,6 +61,10 @@ class State {
 
   void setRole(Role role);
 
+  const PeerId &getLeaderId() const;
+
+  void setLeaderId(const PeerId &leader_id);
+
 
 
   LogIndex getLogOffset() const;
@@ -141,7 +145,7 @@ class State {
   // Volatile
   LogIndex commit_index_, last_applied_;
   Time last_heartbeat_;
-  PeerId me_;
+  PeerId me_, leader_id_;
 
   std::unordered_map<PeerId, PeerState> peers_ = {};
   Config config_ = {};

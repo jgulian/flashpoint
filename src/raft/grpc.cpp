@@ -69,37 +69,37 @@ GrpcProtocol::Peer::Peer(Peer &&peer) noexcept
 
  */
 
-GrpcRaft::GrpcRaft(std::function<void(const std::string &)> do_command)
+GrpcRaft::GrpcRaft(std::function<void(std::string)> do_command)
     : Raft(std::move(do_command)), lock_{} {}
 
-bool GrpcRaft::appendEntries(PeerId peer_id,
+bool GrpcRaft::appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
                              AppendEntriesResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
 
   return false;
 }
-bool GrpcRaft::installSnapshot(PeerId peer_id,
+bool GrpcRaft::installSnapshot(const PeerId &peer_id,
                                const InstallSnapshotRequest &request,
                                InstallSnapshotResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
 
   return false;
 }
-bool GrpcRaft::requestVote(PeerId peer_id, const RequestVoteRequest &request,
+bool GrpcRaft::requestVote(const PeerId &peer_id, const RequestVoteRequest &request,
                            RequestVoteResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
 
   return false;
 }
 
-void GrpcRaft::registerPeer(PeerId peer_id, std::string target) {
+void GrpcRaft::registerPeer(const PeerId &peer_id, std::string target) {
   std::unique_lock<std::shared_mutex> lk(lock_);
 
   auto peer_data = GrpcPeer(target);
   peers_.emplace(peer_id, target);
 }
-void GrpcRaft::unregisterPeer(PeerId peer_id) {
+void GrpcRaft::unregisterPeer(const PeerId &peer_id) {
   std::unique_lock<std::shared_mutex> lk(lock_);
 }
 

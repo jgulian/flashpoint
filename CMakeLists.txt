@@ -37,8 +37,25 @@ protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grp
 target_link_libraries(flashpoint_lib proto)
 target_link_libraries(flashpoint flashpoint_lib)
 
+# TESTING
+
+enable_testing()
+
+include(FetchContent)
+FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        release-1.11.0
+)
+FetchContent_MakeAvailable(googletest)
+
 add_executable(flashpoint_test)
 add_subdirectory(test)
-target_link_libraries(flashpoint_test PUBLIC flashpoint_lib)
+target_link_libraries(flashpoint_test PUBLIC flashpoint_lib gmock)
+
+include(GoogleTest)
+gtest_discover_tests(flashpoint_test)
+
+
 
 add_executable(playground main.cpp)
