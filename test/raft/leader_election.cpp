@@ -27,7 +27,9 @@ class RaftLeaderElection : public ::testing::Test {
 
   std::optional<PeerId> checkForLeader() {
     std::optional<PeerId> leader = std::nullopt;
+    std::cout << "HERE" << std::endl;
     for (auto &raft : rafts_) {
+      std::cout << raft->getId() << std::endl;
       auto leader_id = raft->getLeaderId();
       auto [_, is_leader] = raft->getState();
       if (!leader.has_value())
@@ -69,21 +71,30 @@ class RaftLeaderElection : public ::testing::Test {
   }
 
   void TearDown() override {
-
+    for (auto &raft : rafts_) {
+      auto id = raft->getId();
+      raft_manager_->destroyPeer(id);
+    }
+    rafts_.clear();
   }
 
   int current_peer_id_ = 0;
 };
 
 TEST_F(RaftLeaderElection, SimpleLeaderElection) {
+  std::cout << "JERE1 " << std::endl;
   setPeerCount(3);
+  std::cout << "JERE2 " << std::endl;
   sleepForElectionTimeoutTimes(2);
+  std::cout << "JERE3 " << std::endl;
 
   auto term = agreedTerm();
+  std::cout << "JERE4 " << std::endl;
   ASSERT_TRUE(term.has_value());
   ASSERT_NE(term.value(), 0);
 
-  ASSERT_TRUE(checkForLeader().has_value());
+  auto leader = checkForLeader();
+  ASSERT_TRUE(leader.has_value());
 
   sleepForElectionTimeoutTimes(2);
   auto new_term = agreedTerm();

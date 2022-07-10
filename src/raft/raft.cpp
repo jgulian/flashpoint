@@ -9,6 +9,13 @@ Raft::~Raft() {
   forceKill();
 }
 
+
+
+void Raft::run() {
+  running_ = true;
+  thread_ = std::thread(&Raft::worker, this);
+}
+
 void Raft::kill() { running_ = false; }
 
 void Raft::forceKill() {
@@ -145,6 +152,7 @@ std::pair<LogIndex, bool> Raft::startPeer(PeerId &peer_id, std::string data) {
 void Raft::worker() {
   while (running_) {
     auto current_time = std::chrono::system_clock::now();
+    std::cout << "running " << running_ << std::endl;
 
     {
       auto state_lock = state_.acquireReadLock();

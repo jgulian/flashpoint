@@ -1,5 +1,7 @@
 #include "util/thread_pool.hpp"
 
+#include <iostream>
+
 namespace flashpoint::util {
 
 ThreadPool::ThreadPool(int thread_count) {
@@ -7,13 +9,19 @@ ThreadPool::ThreadPool(int thread_count) {
     threads_.emplace_back(std::thread(&ThreadPool::worker, this));
 }
 ThreadPool::~ThreadPool() {
+  running_ = false;
+  channel_.close();
   for (auto &thread : threads_)
     thread.join();
 }
 
 void ThreadPool::worker() {
-  auto task = channel_.read();
-  task();
+  while (running_) {
+    try {
+      auto task = channel_.read();
+      task();
+    } catch (const std::runtime_error& e) {}
+  }
 }
 
 }

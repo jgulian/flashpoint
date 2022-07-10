@@ -27,6 +27,10 @@ class Raft {
 
   ~Raft();
 
+
+
+  void run();
+
   void kill();
 
   void forceKill();

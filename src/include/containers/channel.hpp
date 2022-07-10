@@ -38,7 +38,9 @@ class Channel {
       throw std::runtime_error("can not read from a closed channel");
 
     std::unique_lock lk(lock_);
-    condition_variable_.wait(lk, [this] { return buffered_count_ != 0; });
+    condition_variable_.wait(lk, [this] { return buffered_count_ != 0 || closed_; });
+    if (closed_)
+      throw std::runtime_error("can not read from a closed channel");
 
     int read_from = read_from_++;
     buffered_count_--;
@@ -50,7 +52,13 @@ class Channel {
 
 
 
-  void close() { closed_ = true; }
+  void close() {
+    if (closed_)
+      throw std::runtime_error("can not close a closed channel");
+
+    closed_ = true;
+    condition_variable_.notify_all();
+  }
 
  private:
   std::vector<T> buffer_ = {};
@@ -87,7 +95,9 @@ class QueueChannel {
       throw std::runtime_error("can not read from a closed channel");
 
     std::unique_lock lk(lock_);
-    condition_variable_.wait(lk, [this] { return !buffer_.empty(); });
+    condition_variable_.wait(lk, [this] { return !buffer_.empty() || closed_; });
+    if (closed_)
+      throw std::runtime_error("can not read from a closed channel");
 
     T data;
     {
@@ -119,6 +129,7 @@ class QueueChannel {
       throw std::runtime_error("can not close a closed channel");
 
     closed_ = true;
+    condition_variable_.notify_all();
   }
 
  private:

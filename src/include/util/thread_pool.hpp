@@ -35,6 +35,7 @@ public:
 private:
   void worker();
 
+  std::atomic<bool> running_ = true;
   containers::QueueChannel<Task> channel_ = {};
   std::vector<std::thread> threads_ = {};
 };
