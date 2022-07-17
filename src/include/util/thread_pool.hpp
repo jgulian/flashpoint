@@ -19,17 +19,17 @@ public:
   ~ThreadPool();
 
   template <typename F, typename... A, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<A>...>>
-  std::promise<R> newTask(const F& f, const A& ...a) {
-    std::promise<R> promise;
-    channel_.write([&promise, f, a...](){
+  std::future<R> newTask(const F& f, const A& ...a) {
+    auto promise = std::make_shared<std::promise<R>>();
+    channel_.write([promise, f, a...](){
       if constexpr (std::is_void_v<R>) {
         f(a...);
-        promise.set_value();
+        promise->set_value();
       } else {
-        promise.set_value(f(a...));
+        promise->set_value(f(a...));
       }
     });
-    return promise;
+    return promise->get_future();
   }
 
 private:

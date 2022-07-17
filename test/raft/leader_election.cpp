@@ -2,18 +2,23 @@
 #include <string>
 #include <optional>
 #include <thread>
+#include <format>
 
 #include "gtest/gtest.h"
 
 #include "raft/raft.hpp"
 #include "raft/in_memory.hpp"
+#include "util/logger.hpp"
 
 namespace flashpoint::test::raft {
 
 class RaftLeaderElection : public ::testing::Test {
  public:
   void sleepForElectionTimeoutTimes(int x) {
-    std::this_thread::sleep_for(ElectionTimeout * x);
+    for (int i = 0; i < x; i++) {
+      std::this_thread::sleep_for(ElectionTimeout);
+      logger_->log("SLEPT FOR %D\n", i);
+    }
   }
 
   void setPeerCount(int n) {
@@ -25,18 +30,22 @@ class RaftLeaderElection : public ::testing::Test {
     }
   }
 
+  void runRafts() {
+    for (auto &raft : rafts_)
+      raft->run();
+  }
+
   std::optional<PeerId> checkForLeader() {
     std::optional<PeerId> leader = std::nullopt;
-    std::cout << "HERE" << std::endl;
     for (auto &raft : rafts_) {
-      std::cout << raft->getId() << std::endl;
-      auto leader_id = raft->getLeaderId();
       auto [_, is_leader] = raft->getState();
-      if (!leader.has_value())
-        leader = leader_id;
-      else if (leader.has_value() && leader.value() != leader_id ||
-          leader.has_value() && is_leader && leader.value() != raft->getId())
-        return std::nullopt;
+      std::cout << raft->getId() << ", " << is_leader << std::endl;
+      if (is_leader) {
+        if (leader.has_value())
+          return std::nullopt;
+        else
+          leader = raft->getId();
+      }
     }
     return leader;
   }
@@ -57,18 +66,20 @@ class RaftLeaderElection : public ::testing::Test {
   std::vector<std::string> log_ = {};
   std::set<std::shared_ptr<InMemoryRaftManager::InMemoryRaft>> rafts_ = {};
  protected:
-  RaftLeaderElection() : raft_manager_() {
+  RaftLeaderElection()
+      : raft_manager_(), logger_(std::make_shared<util::SimpleLogger>(util::FATAL)) {
     raft_manager_ = std::make_unique<InMemoryRaftManager>(
         [this](std::string command) {
           log_.emplace_back(std::move(command));
-        }
+        },
+        false,
+        logger_
     );
   }
 
   ~RaftLeaderElection() override = default;
 
-  void SetUp() override {
-  }
+  void SetUp() override {}
 
   void TearDown() override {
     for (auto &raft : rafts_) {
@@ -78,28 +89,36 @@ class RaftLeaderElection : public ::testing::Test {
     rafts_.clear();
   }
 
+  std::shared_ptr<util::SimpleLogger> logger_;
   int current_peer_id_ = 0;
 };
 
 TEST_F(RaftLeaderElection, SimpleLeaderElection) {
-  std::cout << "JERE1 " << std::endl;
+  std::cout << "here1" << std::endl;
   setPeerCount(3);
-  std::cout << "JERE2 " << std::endl;
-  sleepForElectionTimeoutTimes(2);
-  std::cout << "JERE3 " << std::endl;
+  runRafts();
+
+  std::cout << "here2" << std::endl;
+
+  sleepForElectionTimeoutTimes(4);
+
+  std::cout << "here3" << std::endl;
 
   auto term = agreedTerm();
-  std::cout << "JERE4 " << std::endl;
   ASSERT_TRUE(term.has_value());
   ASSERT_NE(term.value(), 0);
+
+  std::cout << "here4" << std::endl;
 
   auto leader = checkForLeader();
   ASSERT_TRUE(leader.has_value());
 
+  std::cout << "here5" << std::endl;
+
   sleepForElectionTimeoutTimes(2);
   auto new_term = agreedTerm();
   ASSERT_EQ(term, new_term);
+
+  std::cout << "here6" << std::endl;
 }
-
-
 }

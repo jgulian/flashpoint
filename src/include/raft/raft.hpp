@@ -9,21 +9,23 @@
 #include <unordered_set>
 #include <vector>
 
-#include "util/thread_pool.hpp"
-
 #include "containers/channel.hpp"
 #include "raft/state.hpp"
+#include "util/logger.hpp"
+#include "util/thread_pool.hpp"
 
 namespace flashpoint::raft {
 
 using namespace std::chrono_literals;
-constexpr auto ElectionTimeout = 1000ms;
-constexpr auto MinSleepTime = 200ms;
-constexpr auto MaxSleepTime = 500ms;
+constexpr auto ElectionTimeout = 2000ms;
+constexpr auto MinSleepTime = 700ms;
+constexpr auto MaxSleepTime = 1000ms;
 
 class Raft {
  public:
-  explicit Raft(const std::function<void(std::string)> &do_command);
+  explicit Raft(const PeerId &peer_id,
+                const std::function<void(std::string)> &do_command,
+                std::shared_ptr<util::Logger> logger = nullptr);
 
   ~Raft();
 
@@ -62,7 +64,7 @@ class Raft {
 
 
 
-  virtual void registerPeer(const PeerId &peer_id, std::string peer_data) = 0;
+  virtual void registerPeer(const PeerId &peer_id, const std::string &peer_data) = 0;
 
   virtual void unregisterPeer(const PeerId &peer_id) = 0;
 
@@ -79,15 +81,13 @@ class Raft {
   void receiveRequestVote(const RequestVoteRequest &request,
                           RequestVoteResponse &response);
 
+  State state_;
  private:
   void worker();
 
-  void leaderWorker();
+  void leaderElection(LogTerm term);
 
-  void leaderElection();
-
-
-  std::optional<bool> updateFollower(const PeerId &peer_id);
+  void updateFollower(const PeerId &peer_id);
 
   void raiseCommitIndex();
 
@@ -98,11 +98,11 @@ class Raft {
   Random random_;
 
   std::atomic<bool> running_;
-  std::thread thread_, leader_thread_;
+  std::thread thread_;
   util::ThreadPool thread_pool_ = util::ThreadPool(4);
 
   std::function<void(std::string)> do_command_;
-  State state_ = {};
+  std::shared_ptr<util::Logger> logger_;
 };
 } // namespace flashpoint::raft
 

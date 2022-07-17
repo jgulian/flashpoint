@@ -9,6 +9,7 @@
 
 #include <protos/raft.pb.h>
 #include <unordered_map>
+#include <utility>
 
 #include "util.hpp"
 
@@ -34,6 +35,15 @@ using OptionalRef = std::optional<std::reference_wrapper<T>>;
 class State {
   class PeerState {
     friend State;
+
+   public:
+    PeerState(std::string peer_id) : peer_id_(std::move(peer_id)), match_index_(0), next_index_(1), lock_() {}
+
+    PeerState(const PeerState &other)
+        : peer_id_(other.peer_id_), match_index_(other.match_index_), next_index_(other.next_index_), lock_() {}
+
+
+   private:
     std::string peer_id_;
     LogIndex match_index_, next_index_;
     mutable std::shared_mutex lock_;
@@ -47,6 +57,8 @@ class State {
   };
 
  public:
+  explicit State(const PeerId &peer_id);
+
   PeerId me() const;
 
   LogTerm getCurrentTerm() const;
@@ -75,7 +87,7 @@ class State {
 
   void setLogSize(LogIndex log_size);
 
-  std::pair<LogIndex, LogTerm> getLastLogInfo();
+  std::pair<LogIndex, LogTerm> getLastLogInfo() const;
 
   OptionalRef<LogEntry> atLogIndex(LogIndex log_index) const;
 
@@ -83,7 +95,7 @@ class State {
 
   bool cutLogToIndex(LogIndex index);
 
-  void appendToLog(const LogEntry& entry);
+  void appendToLog(const LogEntry &entry);
 
 
   LogIndex getCommitIndex() const;
@@ -104,23 +116,23 @@ class State {
 
   void getRequestVoteRequest(RequestVoteRequest &request) const;
 
-  void getAppendEntriesRequest(PeerId &peer_id,
+  void getAppendEntriesRequest(const PeerId &peer_id,
                                AppendEntriesRequest &request) const;
 
-  void getInstallSnapshotRequest(PeerId &peer_id,
+  void getInstallSnapshotRequest(const PeerId &peer_id,
                                  InstallSnapshotRequest &request) const;
 
 
 
   int getPeerCount() const;
 
-  const std::unordered_map<PeerId, PeerState>& getPeers() const;
+  const std::unordered_map<PeerId, PeerState> &getPeers() const;
 
-  std::pair<LogIndex, LogIndex> getPeerIndices(PeerId &peer_id) const;
+  std::pair<LogIndex, LogIndex> getPeerIndices(const PeerId &peer_id) const;
 
   void setPeerIndices(const PeerId &peer_id, std::pair<LogIndex, LogIndex> indices);
 
-  void configChanges(LogEntry &entry,
+  void configChanges(const LogEntry &entry,
                      std::unordered_map<std::string, std::string> &additions,
                      std::unordered_set<std::string> &removals);
 
@@ -130,20 +142,20 @@ class State {
 
   std::unique_lock<std::shared_mutex> acquireWriteLock() const;
 
-  std::shared_lock<std::shared_mutex> acquireReadLock() const;
+  std::unique_lock<std::shared_mutex> acquireReadLock() const;
 
  private:
   mutable std::shared_mutex lock_;
 
   // Persistent
-  LogTerm current_term_;
-  std::optional<PeerId> voted_for_;
-  Role role_;
-  LogIndex log_offset_, log_size_;
+  LogTerm current_term_ = 0;
+  std::optional<PeerId> voted_for_ = std::nullopt;
+  Role role_ = FOLLOWER;
+  LogIndex log_offset_ = 0, log_size_ = 1;
   std::unique_ptr<std::vector<protos::raft::LogEntry>> log_;
 
   // Volatile
-  LogIndex commit_index_, last_applied_;
+  LogIndex commit_index_ = 0, last_applied_ = 0;
   Time last_heartbeat_;
   PeerId me_, leader_id_;
 

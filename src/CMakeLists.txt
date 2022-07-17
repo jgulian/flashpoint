@@ -20,7 +20,9 @@ target_sources(
         storage/engines/proto_engine.cpp
         storage/engines/raft_clerk_engine.cpp
 
+        util/containers.cpp
         util/thread_pool.cpp
+        util/logger.cpp
 )
 target_sources(
         flashpoint

@@ -23,7 +23,10 @@ class InMemoryRaftManager {
     friend InMemoryRaftManager;
 
    public:
-    InMemoryRaft(const std::function<void(std::string)> &do_command, InMemoryRaftManager &manager, PeerId &id);
+    InMemoryRaft(const std::function<void(std::string)> &do_command,
+                 InMemoryRaftManager &manager,
+                 PeerId &id,
+                 const std::shared_ptr<util::Logger> &logger = nullptr);
 
    protected:
     bool appendEntries(const PeerId &peer_id,
@@ -40,28 +43,23 @@ class InMemoryRaftManager {
 
 
 
-    void registerPeer(const PeerId &peer_id, std::string peer_data) override;
+    void registerPeer(const PeerId &peer_id, const std::string &peer_data) override;
 
     void unregisterPeer(const PeerId &peer_id) override;
 
    private:
+    void useConfig(const LogEntry &entry);
+
     InMemoryRaftManager &manager_;
     std::set<PeerId> known_peers_ = {};
     PeerId id_;
-
-    void appendEntries(const AppendEntriesRequest &request,
-                       AppendEntriesResponse &response);
-
-    void installSnapshot(const InstallSnapshotRequest &request,
-                         InstallSnapshotResponse &response);
-
-    void requestVote(const RequestVoteRequest &request,
-                     RequestVoteResponse &response);
   };
 
-  InMemoryRaftManager(const std::function<void(std::string)> &do_command, bool use_configs = true);
+  explicit InMemoryRaftManager(const std::function<void(std::string)> &do_command,
+                               bool use_configs = true,
+                               const std::shared_ptr<util::Logger> &logger = nullptr);
 
-  InMemoryRaftManager(InMemoryRaftManager &&other);
+  InMemoryRaftManager(InMemoryRaftManager &&other) noexcept;
 
 
 
@@ -85,6 +83,7 @@ class InMemoryRaftManager {
   std::function<void(std::string)> do_command_;
   std::unordered_map<PeerId, std::shared_ptr<InMemoryRaft>> rafts_ = {};
   std::unordered_map<PeerId, int> partitions_ = {};
+  std::shared_ptr<util::Logger> logger_;
 
   bool use_configs_;
 };

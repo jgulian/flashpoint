@@ -12,7 +12,7 @@ namespace flashpoint::raft {
 
 class GrpcRaft final : public Raft, public protos::raft::Raft::Service {
  public:
-  explicit GrpcRaft(std::function<void(std::string)> do_command);
+  explicit GrpcRaft(const PeerId &peer_id, std::function<void(std::string)> do_command);
 
 protected:
   bool appendEntries(const PeerId &peer_id, const AppendEntriesRequest &request,
@@ -22,7 +22,7 @@ protected:
   bool requestVote(const PeerId &peer_id, const RequestVoteRequest &request,
                    RequestVoteResponse &response) override;
 
-  void registerPeer(const PeerId &peer_id, std::string peer_data) override;
+  void registerPeer(const PeerId &peer_id, const std::string &peer_data) override;
   void unregisterPeer(const PeerId &peer_id) override;
 
 private:
