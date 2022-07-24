@@ -10,6 +10,8 @@
 #include <initializer_list>
 
 #include "raft/raft.hpp"
+#include "util/random.hpp"
+
 #include <protos/raft.pb.h>
 
 
@@ -23,10 +25,11 @@ class InMemoryRaftManager {
     friend InMemoryRaftManager;
 
    public:
-    InMemoryRaft(const std::function<void(std::string)> &do_command,
+    InMemoryRaft(const PeerId &id,
                  InMemoryRaftManager &manager,
-                 PeerId &id,
-                 const std::shared_ptr<util::Logger> &logger = nullptr);
+                 std::function<void(std::string)> do_command,
+                 std::shared_ptr<util::Logger> logger,
+                 util::DefaultRandom random);
 
    protected:
     bool appendEntries(const PeerId &peer_id,
@@ -55,9 +58,9 @@ class InMemoryRaftManager {
     PeerId id_;
   };
 
-  explicit InMemoryRaftManager(const std::function<void(std::string)> &do_command,
-                               bool use_configs = true,
-                               const std::shared_ptr<util::Logger> &logger = nullptr);
+  explicit InMemoryRaftManager(bool use_configs = true,
+                               const std::shared_ptr<util::Logger> &logger = nullptr,
+                               util::DefaultRandom random = {});
 
   InMemoryRaftManager(InMemoryRaftManager &&other) noexcept;
 
@@ -67,7 +70,8 @@ class InMemoryRaftManager {
 
   bool allowedToContact(const PeerId &peer_a, const PeerId &peer_b);
 
-  std::shared_ptr<InMemoryRaft> createPeer(PeerId &peer_id);
+  std::shared_ptr<InMemoryRaftManager::InMemoryRaft> createPeer(const PeerId &peer_id,
+                                                                const std::function<void(std::string)> &do_command);
 
   void destroyPeer(PeerId &peer_id);
 
@@ -80,13 +84,14 @@ class InMemoryRaftManager {
   int partition(std::initializer_list<PeerId> list);
 
  private:
-  std::function<void(std::string)> do_command_;
   std::unordered_map<PeerId, std::shared_ptr<InMemoryRaft>> rafts_ = {};
   std::unordered_map<PeerId, int> partitions_ = {};
   std::shared_ptr<util::Logger> logger_;
+  util::DefaultRandom random_;
 
   bool use_configs_;
 };
+
 } // namespace flashpoint::test::raft
 
 #endif // FLASHPOINT_TEST_INCLUDE_RAFT_IN_MEMORY_HPP_

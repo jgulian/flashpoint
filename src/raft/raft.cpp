@@ -1,11 +1,14 @@
 #include "raft/raft.hpp"
 
+#include <utility>
+
 namespace flashpoint::raft {
 
 Raft::Raft(const PeerId &peer_id,
-           const std::function<void(std::string)> &do_command,
-           std::shared_ptr<util::Logger> logger)
-    : state_(peer_id), do_command_(do_command), logger_(std::move(logger)) {}
+           std::function<void(std::string)> do_command,
+           std::shared_ptr<util::Logger> logger,
+           util::DefaultRandom random)
+    : state_(peer_id), do_command_(std::move(do_command)), logger_(std::move(logger)), random_(random) {}
 
 Raft::~Raft() {
   forceKill();
@@ -81,7 +84,10 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
 
   if (request.term() < current_term) {
     response.set_success(false);
-    logger_->log("%s, %d: failed append entries from %s", state_.me().c_str(), state_.getCurrentTerm(), request.leader_id().c_str());
+    logger_->log("%s, %d: failed append entries from %s",
+                 state_.me().c_str(),
+                 state_.getCurrentTerm(),
+                 request.leader_id().c_str());
     return;
   }
 
@@ -93,7 +99,7 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     logger_->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
     return;
   } else if (auto conflict_entry = state_.atLogIndex(request.prev_log_index());
-             !conflict_entry.has_value() || conflict_entry->get().term() != request.prev_log_term()) {
+      !conflict_entry.has_value() || conflict_entry->get().term() != request.prev_log_term()) {
     response.set_conflict_term(conflict_entry->get().term());
     LogIndex i = request.prev_log_index();
     while (true) {
@@ -105,7 +111,10 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     response.set_conflict_index(i);
     response.set_success(false);
 
-    logger_->log("%s, %d: failed append entries from %s", state_.me().c_str(), state_.getCurrentTerm(), request.leader_id().c_str());
+    logger_->log("%s, %d: failed append entries from %s",
+                 state_.me().c_str(),
+                 state_.getCurrentTerm(),
+                 request.leader_id().c_str());
     return;
   }
 
@@ -136,6 +145,9 @@ void Raft::receiveRequestVote(const RequestVoteRequest &request,
     state_.setCurrentTerm(request.term());
     state_.setVotedFor(std::nullopt);
   }
+
+  if (10 < current_term)
+    throw std::runtime_error("this is bad");
 
   auto voted_for = state_.getVotedFor();
   auto [last_log_index, last_log_term] = state_.getLastLogInfo();
@@ -196,7 +208,7 @@ void Raft::worker() {
       commitEntries();
     }
 
-    std::this_thread::sleep_until(current_time + random_.randomDurationBetween(MinSleepTime, MaxSleepTime));
+    std::this_thread::sleep_until(current_time + random_.generateDurationBetween(MinSleepTime, MaxSleepTime));
   }
 }
 
@@ -204,6 +216,7 @@ void Raft::leaderElection(LogTerm term) {
   int peer_count = -1;
   containers::QueueChannel<RequestVoteResponse> channel = {};
   RequestVoteRequest request;
+  std::vector<std::future<void>> futures = {};
 
   {
     auto state_lock = state_.acquireReadLock();
@@ -220,7 +233,7 @@ void Raft::leaderElection(LogTerm term) {
       auto peer_id = peer_data.first;
       if (peer_id == state_.me()) continue;
 
-      thread_pool_.newTask([this, peer_id, &request, &channel]() {
+      auto future = thread_pool_.newTask([this, peer_id, &request, &channel]() {
         RequestVoteResponse response;
         auto ok = requestVote(peer_id, request, response);
 
@@ -229,6 +242,7 @@ void Raft::leaderElection(LogTerm term) {
 
         channel.write(std::move(response));
       });
+      futures.emplace_back(std::move(future));
     }
   }
 
@@ -243,6 +257,9 @@ void Raft::leaderElection(LogTerm term) {
       auto state_lock = state_.acquireWriteLock();
       state_.setCurrentTerm(response.term());
       state_.setRole(FOLLOWER);
+
+      //for (auto &future : futures)
+      //  future.wait();
       return;
     }
   }
@@ -255,6 +272,9 @@ void Raft::leaderElection(LogTerm term) {
     else
       state_.setRole(FOLLOWER);
   }
+
+  //for (auto &future : futures)
+  //  future.wait();
 }
 
 void Raft::updateFollower(const PeerId &peer_id) {

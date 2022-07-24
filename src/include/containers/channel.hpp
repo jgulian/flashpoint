@@ -3,10 +3,11 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <deque>
+#include <queue>
 #include <vector>
 #include <thread>
 #include <optional>
+#include <utility>
 
 namespace flashpoint::containers {
 
@@ -78,34 +79,39 @@ class QueueChannel {
 
 
 
-  void write(T data) {
+  void write(T &&data) {
     std::lock_guard<std::mutex> lock(lock_);
+    accessors_++;
 
     if (closed_)
       throw std::runtime_error("can not write to a closed channel");
 
-    buffer_.push_back(std::move(data));
+    buffer_.push(std::forward<T>(data));
     item_count_++;
 
     condition_variable_.notify_one();
+    accessors_--;
   }
 
   T read() {
-    std::unique_lock lk(lock_);
-    condition_variable_.wait(lk, [this] { return !buffer_.empty() || closed_; });
+    std::unique_lock<std::mutex> lock(lock_);
+    condition_variable_.wait(lock, [this] { return !buffer_.empty() || closed_; });
+    accessors_++;
 
     if (closed_)
       throw std::runtime_error("can not read from a closed channel");
 
     auto data = std::move(buffer_.front());
-    buffer_.pop_front();
+    buffer_.pop();
     item_count_--;
 
+    accessors_--;
     return std::move(data);
   }
 
   std::optional<T> tryRead() {
-    std::unique_lock lk(lock_);
+    std::lock_guard<std::mutex> lock(lock_);
+    accessors_++;
 
     if (closed_)
       throw std::runtime_error("can not read from a closed channel");
@@ -114,9 +120,10 @@ class QueueChannel {
       return std::nullopt;
 
     auto data = std::move(buffer_.front());
-    buffer_.pop_front();
+    buffer_.pop();
     item_count_--;
 
+    accessors_--;
     return std::move(data);
   }
 
@@ -129,7 +136,8 @@ class QueueChannel {
   }
 
  private:
-  std::deque<T> buffer_ = {};
+  std::atomic<int> accessors_ = 0;
+  std::queue<T> buffer_ = {};
   std::mutex lock_ = {};
   std::atomic<bool> closed_ = false;
   int item_count_ = 0;

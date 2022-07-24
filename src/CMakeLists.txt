@@ -22,6 +22,7 @@ target_sources(
 
         util/containers.cpp
         util/thread_pool.cpp
+        util/random.cpp
         util/logger.cpp
 )
 target_sources(

@@ -3,11 +3,12 @@
 namespace flashpoint::test::raft {
 
 
-InMemoryRaftManager::InMemoryRaft::InMemoryRaft(const std::function<void(std::string)> &do_command,
+InMemoryRaftManager::InMemoryRaft::InMemoryRaft(const PeerId &id,
                                                 InMemoryRaftManager &manager,
-                                                PeerId &id,
-                                                const std::shared_ptr<util::Logger> &logger)
-    : Raft(id, do_command, logger), manager_(manager), id_(id) {}
+                                                std::function<void(std::string)> do_command,
+                                                std::shared_ptr<util::Logger> logger,
+                                                util::DefaultRandom random)
+    : Raft(id, std::move(do_command), std::move(logger), random), manager_(manager), id_(id) {}
 
 
 
@@ -65,14 +66,13 @@ void InMemoryRaftManager::InMemoryRaft::useConfig(const LogEntry &entry) {
 
 
 
-InMemoryRaftManager::InMemoryRaftManager(const std::function<void(std::string)> &do_command,
-                                         bool use_configs,
-                                         const std::shared_ptr<util::Logger> &logger)
-    : do_command_(do_command), use_configs_(use_configs), logger_(logger) {}
+InMemoryRaftManager::InMemoryRaftManager(bool use_configs,
+                                         const std::shared_ptr<util::Logger> &logger,
+                                         util::DefaultRandom random)
+    : use_configs_(use_configs), logger_(logger), random_(random) {}
 
 InMemoryRaftManager::InMemoryRaftManager(InMemoryRaftManager &&other) noexcept
-    : do_command_(std::move(other.do_command_)), rafts_(std::move(other.rafts_)),
-      partitions_(std::move(other.partitions_)), use_configs_(other.use_configs_) {}
+    : rafts_(std::move(other.rafts_)), partitions_(std::move(other.partitions_)), use_configs_(other.use_configs_), random_(other.random_) {}
 
 
 
@@ -88,9 +88,9 @@ bool InMemoryRaftManager::allowedToContact(const PeerId &peer_a, const PeerId &p
   return partitions_[peer_a] == partitions_[peer_b];
 }
 
-std::shared_ptr<InMemoryRaftManager::InMemoryRaft> InMemoryRaftManager::createPeer(PeerId &peer_id) {
-  std::cout << logger_ << std::endl;
-  auto raft = std::make_shared<InMemoryRaft>(do_command_, *this, peer_id, logger_);
+std::shared_ptr<InMemoryRaftManager::InMemoryRaft> InMemoryRaftManager::createPeer(const PeerId &peer_id,
+                                                                                   const std::function<void(std::string)> &do_command) {
+  auto raft = std::make_shared<InMemoryRaft>(peer_id, *this, do_command, logger_, random_.generateRandom());
   rafts_[peer_id] = raft;
   partitions_[peer_id] = 0;
 

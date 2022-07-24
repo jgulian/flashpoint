@@ -13,6 +13,7 @@
 #include "raft/state.hpp"
 #include "util/logger.hpp"
 #include "util/thread_pool.hpp"
+#include "util/random.hpp"
 
 namespace flashpoint::raft {
 
@@ -24,8 +25,9 @@ constexpr auto MaxSleepTime = 1000ms;
 class Raft {
  public:
   explicit Raft(const PeerId &peer_id,
-                const std::function<void(std::string)> &do_command,
-                std::shared_ptr<util::Logger> logger = nullptr);
+                std::function<void(std::string)> do_command,
+                std::shared_ptr<util::Logger> logger = nullptr,
+                util::DefaultRandom random = {});
 
   ~Raft();
 
@@ -95,7 +97,7 @@ class Raft {
 
 
 
-  Random random_;
+  util::DefaultRandom random_;
 
   std::atomic<bool> running_;
   std::thread thread_;
