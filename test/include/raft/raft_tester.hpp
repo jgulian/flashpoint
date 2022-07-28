@@ -23,7 +23,7 @@ class RaftTester {
       std::this_thread::sleep_for(ElectionTimeout);
   }
 
-  void createPeer() {
+  PeerId createPeer() {
     auto id = std::to_string(current_peer_id_);
     auto log = std::make_unique<std::vector<std::string>>();
     auto raft = raft_manager_->createPeer(id, [&log](std::string command) {
@@ -31,11 +31,15 @@ class RaftTester {
     });
     rafts_.emplace(std::move(RaftData({id, raft, std::make_unique<std::mutex>(), std::move(log)})));
     current_peer_id_++;
+    return id;
   }
 
-  void setPeerCount(int n) {
+  std::list<PeerId> setPeerCount(int n) {
+    std::list<PeerId> peers = {};
     for (int i = 0; i < n; i++)
-      createPeer();
+      peers.emplace_back(createPeer());
+
+    return peers;
   }
 
   void runRafts() {
@@ -43,17 +47,36 @@ class RaftTester {
       raft.raft->run();
   }
 
-  std::optional<PeerId> checkForLeader() {
-    std::optional<PeerId> leader = std::nullopt;
+  std::map<int, std::optional<PeerId>> getLeaders() {
+    std::map<int, std::optional<PeerId>> leaders;
+    auto partitions = raft_manager_->getPartitions();
+
     for (auto &raft : rafts_) {
       auto [_, is_leader] = raft.raft->getState();
       if (is_leader) {
-        if (leader.has_value())
-          return std::nullopt;
+        int partition = partitions.at(raft.peer_id);
+        if (leaders.contains(partition))
+          leaders[partition] = std::nullopt;
         else
-          leader = raft.raft->getId();
+          leaders[partition] = raft.peer_id;
       }
     }
+
+    return leaders;
+  }
+
+  std::optional<PeerId> checkForLeader() {
+    std::optional<PeerId> leader = std::nullopt;
+    auto leaders = getLeaders();
+    for (auto &[_, leader_id] : leaders) {
+      if (leader.has_value()) {
+        leader = std::nullopt;
+        break;
+      } else {
+        leader = leader_id;
+      }
+    }
+
     return leader;
   }
 
@@ -67,6 +90,22 @@ class RaftTester {
         term = peer_term;
     }
     return term;
+  }
+
+  void connect(const PeerId& peer_id, int partition = 0) {
+    raft_manager_->connect(peer_id, partition);
+  }
+
+  int disconnect(const PeerId& peer_id) {
+    return raft_manager_->disconnect(peer_id);
+  }
+
+  int partition(std::initializer_list<PeerId> list) {
+    return raft_manager_->partition(list);
+  }
+
+  int getDefaultPartition() {
+    return raft_manager_->getDefaultPartition();
   }
 
  private:

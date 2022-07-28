@@ -181,7 +181,8 @@ void Raft::worker() {
     auto current_time = std::chrono::system_clock::now();
 
     {
-      auto state_lock = state_.acquireReadLock();
+      auto state_lock = state_.acquireWriteLock();
+
       auto role = state_.getRole();
       auto term = state_.getCurrentTerm();
 
@@ -204,11 +205,14 @@ void Raft::worker() {
           thread_pool_.newTask([this, peer_id]() { updateFollower(peer_id); });
         }
       }
-
       commitEntries();
     }
 
-    std::this_thread::sleep_until(current_time + random_.generateDurationBetween(MinSleepTime, MaxSleepTime));
+    auto sleep_for = random_.generateDurationBetween(MinSleepTime, MaxSleepTime);
+    if (std::chrono::system_clock::now() < current_time + sleep_for)
+      std::this_thread::sleep_until(current_time + sleep_for);
+    else
+      logger_->msg(util::WARN, "raft worker sleep cycle missed");
   }
 }
 
@@ -258,8 +262,8 @@ void Raft::leaderElection(LogTerm term) {
       state_.setCurrentTerm(response.term());
       state_.setRole(FOLLOWER);
 
-      //for (auto &future : futures)
-      //  future.wait();
+      for (auto &future : futures)
+        future.wait();
       return;
     }
   }
@@ -273,8 +277,8 @@ void Raft::leaderElection(LogTerm term) {
       state_.setRole(FOLLOWER);
   }
 
-  //for (auto &future : futures)
-  //  future.wait();
+  for (auto &future : futures)
+    future.wait();
 }
 
 void Raft::updateFollower(const PeerId &peer_id) {

@@ -16,11 +16,11 @@ namespace flashpoint::test::raft {
 
 class RaftLeaderElection : public ::testing::Test {
  public:
-  std::shared_ptr<util::SimpleLogger> logger_ = std::make_unique<util::SimpleLogger>(util::FATAL);
-  RaftTester raft_tester1_;
+  std::shared_ptr<util::SimpleLogger> logger_ = std::make_unique<util::SimpleLogger>(util::WARN);
+  RaftTester raft_tester_;
 
  protected:
-  RaftLeaderElection() : raft_tester1_(false, logger_, {}) {}
+  RaftLeaderElection() : raft_tester_(false, logger_, {}) {}
 
   ~RaftLeaderElection() override = default;
 
@@ -33,33 +33,60 @@ class RaftLeaderElection : public ::testing::Test {
 TEST_F(RaftLeaderElection, SimpleLeaderElection) {
   // sigsegv seed: {1, 2, 3, 4}
   // no leader/sigsegv seed ()
-  auto seed = std::seed_seq();
-  auto raft_tester_ = RaftTester(false, logger_, util::DefaultRandom(seed));
 
   raft_tester_.setPeerCount(3);
   raft_tester_.runRafts();
 
-  std::cout << "here2" << std::endl;
-
   RaftTester::sleepForElectionTimeoutTimes(4);
-
-  std::cout << "here3" << std::endl;
 
   auto term = raft_tester_.agreedTerm();
   ASSERT_TRUE(term.has_value());
   ASSERT_NE(term.value(), 0);
 
-  std::cout << "here4" << std::endl;
-
   auto leader = raft_tester_.checkForLeader();
   ASSERT_TRUE(leader.has_value());
-
-  std::cout << "here5" << std::endl;
 
   RaftTester::sleepForElectionTimeoutTimes(2);
   auto new_term = raft_tester_.agreedTerm();
   ASSERT_EQ(term, new_term);
-
-  std::cout << "here6" << std::endl;
 }
+
+TEST_F(RaftLeaderElection, QuorumRequirements) {
+  auto peers = raft_tester_.setPeerCount(3);
+  for (auto &peer : peers)
+    std::printf("%s ", peer.c_str());
+   std::printf("\n");
+
+  raft_tester_.runRafts();
+
+  RaftTester::sleepForElectionTimeoutTimes(4);
+
+  auto leader = raft_tester_.checkForLeader();
+  ASSERT_TRUE(leader.has_value());
+
+  auto first_leader_id = leader.value();
+  auto new_partition = raft_tester_.disconnect(first_leader_id);
+
+  RaftTester::sleepForElectionTimeoutTimes(4);
+
+  leader = raft_tester_.checkForLeader();
+  ASSERT_TRUE(leader.has_value());
+
+  auto default_partition = raft_tester_.getDefaultPartition();
+  auto leaders = raft_tester_.getLeaders();
+
+  ASSERT_TRUE(leaders.contains(default_partition));
+  ASSERT_TRUE(leaders.at(default_partition).has_value());
+  ASSERT_STREQ(leaders.at(default_partition)->c_str(), first_leader_id.c_str());
+
+  ASSERT_TRUE(leaders.contains(new_partition));
+  ASSERT_TRUE(leaders.at(new_partition).has_value());
+  auto second_leader_id = leaders.at(new_partition).value();
+  ASSERT_STRNE(second_leader_id.c_str(), first_leader_id.c_str());
+
+  raft_tester_.disconnect(second_leader_id);
+
+
+}
+
 }

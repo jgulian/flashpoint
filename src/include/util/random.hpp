@@ -11,17 +11,18 @@ class Random {
  public:
   Random() : generator_(std::random_device()()) {}
 
-  explicit Random(std::seed_seq &seed) : generator_(seed) {}
+  explicit Random(std::seed_seq seed) : generator_(seed) {}
 
 
-
-  Random generateRandom() {
+  std::seed_seq generateSeed() {
     std::vector<unsigned long> seed = {};
     for (int i = 0; i < 8; i++)
       seed.push_back(unsigned_random_(generator_));
+    return std::seed_seq(seed.begin(), seed.end());
+  }
 
-    auto seed_seq = std::seed_seq(seed.begin(), seed.end());
-    return Random(seed_seq);
+  Random generateRandom() {
+    return Random(generateSeed());
   }
 
   float generateUnitUniform() {

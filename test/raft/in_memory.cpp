@@ -74,6 +74,15 @@ InMemoryRaftManager::InMemoryRaftManager(bool use_configs,
 InMemoryRaftManager::InMemoryRaftManager(InMemoryRaftManager &&other) noexcept
     : rafts_(std::move(other.rafts_)), partitions_(std::move(other.partitions_)), use_configs_(other.use_configs_), random_(other.random_) {}
 
+InMemoryRaftManager::~InMemoryRaftManager() {
+  for (auto &one : rafts_)
+    for (auto &two : rafts_)
+      if (one.first != two.first)
+        one.second->unregisterPeer(two.first);
+
+  for (auto &raft : rafts_)
+    raft.second->forceKill();
+}
 
 
 bool InMemoryRaftManager::usingConfigs() const {
@@ -115,7 +124,7 @@ void InMemoryRaftManager::destroyPeer(PeerId &peer_id) {
 
 int InMemoryRaftManager::disconnect(const PeerId &peer_id) {
   if (partitions_.contains(peer_id))
-    throw std::runtime_error("peer does not exist");
+    throw std::runtime_error("peer does not exist 1: " + peer_id);
 
   std::unordered_set<int> partitions = {};
   for (const auto &peer : partitions_)
@@ -131,7 +140,7 @@ int InMemoryRaftManager::disconnect(const PeerId &peer_id) {
 
 void InMemoryRaftManager::connect(const PeerId &peer_id, int partition) {
   if (partitions_.contains(peer_id))
-    throw std::runtime_error("peer does not exist");
+    throw std::runtime_error("peer does not exist 2: " + peer_id);
 
   partitions_[peer_id] = partition;
 }
@@ -146,4 +155,13 @@ int InMemoryRaftManager::partition(std::initializer_list<PeerId> list) {
   }
   return partition;
 }
+
+const std::unordered_map<PeerId, int> &InMemoryRaftManager::getPartitions() const {
+  return partitions_;
+}
+
+const int InMemoryRaftManager::getDefaultPartition() {
+  return 0;
+}
+
 }

@@ -18,9 +18,9 @@
 namespace flashpoint::raft {
 
 using namespace std::chrono_literals;
-constexpr auto ElectionTimeout = 2000ms;
-constexpr auto MinSleepTime = 700ms;
-constexpr auto MaxSleepTime = 1000ms;
+constexpr auto ElectionTimeout = 1000ms;
+constexpr auto MinSleepTime = 300ms;
+constexpr auto MaxSleepTime = 500ms;
 
 class Raft {
  public:
@@ -101,7 +101,7 @@ class Raft {
 
   std::atomic<bool> running_;
   std::thread thread_;
-  util::ThreadPool thread_pool_ = util::ThreadPool(4);
+  util::ThreadPool thread_pool_ = util::ThreadPool(6);
 
   std::function<void(std::string)> do_command_;
   std::shared_ptr<util::Logger> logger_;

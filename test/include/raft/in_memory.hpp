@@ -64,6 +64,8 @@ class InMemoryRaftManager {
 
   InMemoryRaftManager(InMemoryRaftManager &&other) noexcept;
 
+  ~InMemoryRaftManager();
+
 
 
   bool usingConfigs() const;
@@ -82,6 +84,10 @@ class InMemoryRaftManager {
   void connect(const PeerId &peer_id, int partition = 0);
 
   int partition(std::initializer_list<PeerId> list);
+
+  const std::unordered_map<PeerId, int> &getPartitions() const;
+
+  static const int getDefaultPartition();
 
  private:
   std::unordered_map<PeerId, std::shared_ptr<InMemoryRaft>> rafts_ = {};
