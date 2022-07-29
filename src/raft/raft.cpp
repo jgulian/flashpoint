@@ -99,12 +99,13 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     logger_->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
     return;
   } else if (auto conflict_entry = state_.atLogIndex(request.prev_log_index());
-      !conflict_entry.has_value() || conflict_entry->get().term() != request.prev_log_term()) {
-    response.set_conflict_term(conflict_entry->get().term());
+      !conflict_entry.has_value() ||
+              conflict_entry->get(<#initializer#>, <#initializer#>).term() != request.prev_log_term()) {
+    response.set_conflict_term(conflict_entry->get(<#initializer#>, <#initializer#>).term());
     LogIndex i = request.prev_log_index();
     while (true) {
       auto entry = state_.atLogIndex(i);
-      if (!entry.has_value() || entry->get().term() == request.prev_log_term())
+      if (!entry.has_value() || entry->get(<#initializer#>, <#initializer#>).term() == request.prev_log_term())
         break;
       i--;
     }
@@ -310,12 +311,12 @@ void Raft::commitEntries() {
     if (!entry.has_value())
       throw std::runtime_error("no such log entry");
 
-    if (entry->get().has_rsm_data())
-      do_command_(entry->get().rsm_data());
+    if (entry->get(<#initializer#>, <#initializer#>).has_rsm_data())
+      do_command_(entry->get(<#initializer#>, <#initializer#>).rsm_data());
     else {
       std::unordered_map<std::string, std::string> additions;
       std::unordered_set<std::string> removals;
-      state_.configChanges(entry->get(), additions, removals);
+      state_.configChanges(entry->get(<#initializer#>, <#initializer#>), additions, removals);
       for (auto [peer_id, peer_data] : additions)
         registerPeer(peer_id, std::move(peer_data));
       for (auto peer_id : removals)

@@ -5,6 +5,8 @@ target_sources(
 
         containers/channel.cpp
 
+        keyvalue/keyvalue.cpp
+
         public/grpc.cpp
 
         raft/raft.cpp
@@ -12,13 +14,6 @@ target_sources(
         raft/util.cpp
 
         raft/grpc.cpp
-
-        storage/document.cpp
-
-        storage/engines/json_engine.cpp
-        storage/engines/logger_engine.cpp
-        storage/engines/proto_engine.cpp
-        storage/engines/raft_clerk_engine.cpp
 
         util/containers.cpp
         util/thread_pool.cpp

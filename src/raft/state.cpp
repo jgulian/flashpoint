@@ -115,7 +115,7 @@ void State::getAppendEntriesRequest(const PeerId &peer_id,
     throw std::runtime_error("should have installed snapshot");
 
   request.set_prev_log_index(match_index);
-  request.set_prev_log_term(match_log->get().term());
+  request.set_prev_log_term(match_log->get(<#initializer#>, <#initializer#>).term());
 
   //TODO: use next index to add entries
 
