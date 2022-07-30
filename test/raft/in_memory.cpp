@@ -123,8 +123,11 @@ void InMemoryRaftManager::destroyPeer(PeerId &peer_id) {
 }
 
 int InMemoryRaftManager::disconnect(const PeerId &peer_id) {
-  if (partitions_.contains(peer_id))
+  if (partitions_.contains(peer_id)) {
+    for (auto &[peer, partition] : partitions_)
+      std::printf("%s: %d, %d\n", peer_id.c_str(), partition, peer == peer_id);
     throw std::runtime_error("peer does not exist 1: " + peer_id);
+  }
 
   std::unordered_set<int> partitions = {};
   for (const auto &peer : partitions_)

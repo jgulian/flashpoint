@@ -52,11 +52,7 @@ TEST_F(RaftLeaderElection, SimpleLeaderElection) {
 }
 
 TEST_F(RaftLeaderElection, QuorumRequirements) {
-  auto peers = raft_tester_.setPeerCount(3);
-  for (auto &peer : peers)
-    std::printf("%s ", peer.c_str());
-   std::printf("\n");
-
+  raft_tester_.setPeerCount(3);
   raft_tester_.runRafts();
 
   RaftTester::sleepForElectionTimeoutTimes(4);
