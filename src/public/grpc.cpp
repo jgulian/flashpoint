@@ -11,7 +11,7 @@ PublicKeyValueApi::PublicKeyValueApi(std::shared_ptr<Engine> engine)
                                       const ::protos::GetArgs *request,
                                       ::protos::GetReply *reply) {
   auto key = request->key();
-  auto value_ref = storage_engine_->get(key);
+  auto value_ref = storage_engine_->get(key, <#initializer#>);
 
   if (!value_ref.has_value()) {
     reply->mutable_status()->set_code(protos::Code::Error);

@@ -6,6 +6,7 @@ target_sources(
         containers/channel.cpp
 
         keyvalue/keyvalue.cpp
+        keyvalue/storage/simple_storage.cpp
 
         public/grpc.cpp
 

@@ -11,20 +11,23 @@
 namespace flashpoint::keyvalue {
     class Plugin {
     public:
-        explicit Plugin(std::function<bool(Operation operation)> start) : start_fn_(std::move(start)) {}
+        explicit Plugin(std::function<bool(Operation &operation)> start) : start_fn_(std::move(start)) {}
         Plugin(const Plugin& plugin) = delete;
 
-        virtual bool forward(Operation operation) = 0;
+        virtual bool forward(Operation &operation) = 0;
+
+    protected:
+        bool start(Operation &operation);
+
     private:
-        std::function<bool(Operation operation)> start_fn_;
+        std::function<bool(Operation &operation)> start_fn_;
     };
 
     class Storage {
     public:
         Storage(const Storage& storage) = delete;
 
-        virtual bool put(const Operation &operation) = 0;
-        virtual bool get(const Operation &operation, std::string &value) = 0;
+        virtual bool doOperation(Operation &operation) = 0;
     };
 
     class KeyValueService {
@@ -36,6 +39,8 @@ namespace flashpoint::keyvalue {
         bool get(const std::string &key, std::string &value);
 
     private:
+        bool forwardOperation(Operation &operation);
+
         std::shared_ptr<Storage> storage_;
         std::list<std::shared_ptr<Plugin>> plugins_;
     };

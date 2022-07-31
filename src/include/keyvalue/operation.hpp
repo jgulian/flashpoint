@@ -13,7 +13,9 @@ namespace flashpoint::keyvalue {
 
     struct Operation {
         OperationType type;
-        std::string data;
+        std::string request;
+        std::string result;
+        bool complete = false;
     };
 
 }

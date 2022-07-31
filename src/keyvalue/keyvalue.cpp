@@ -2,20 +2,28 @@
 
 namespace flashpoint::keyvalue {
 
+    bool Plugin::start(Operation &operation) {
+        return start_fn_(operation);
+    }
 
     bool KeyValueService::put(const std::string &key, const std::string &value) {
-        Operation operation = {
-                PUT,
-                key + '\0' + value,
-        };
-        for (auto &plugin : plugins_)
-            if (!plugin->forward(operation))
-                return false;
-        return true;
+        auto op = Operation{PUT, key + '\0' + value};
+        return forwardOperation(op);
     }
 
     bool KeyValueService::get(const std::string &key, std::string &value) {
-        return false;
+        auto op = Operation{GET, key};
+        auto ok = forwardOperation(op);
+        if (ok)
+            value = op.request;
+        return ok;
+    }
+
+    bool KeyValueService::forwardOperation(Operation &operation) {
+        for (auto &plugin: plugins_)
+            if (!plugin->forward(operation))
+                return false;
+        return storage_->doOperation(operation);
     }
 
     KeyValueStorageService *KeyValueStorageService::addStorage(std::shared_ptr<Storage> storage) {
