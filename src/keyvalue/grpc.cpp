@@ -1,35 +1,25 @@
-#include "public/grpc.hpp"
+#include "keyvalue/grpc.hpp"
 
-#include <utility>
+namespace flashpoint::keyvalue {
 
-namespace flashpoint {
-
-PublicKeyValueApi::PublicKeyValueApi(std::shared_ptr<Engine> engine)
-    : storage_engine_(std::move(engine)) {}
+PublicKeyValueApi::PublicKeyValueApi(std::shared_ptr<KeyValueService> service)
+    : storage_engine_(std::move(service)) {}
 
 ::grpc::Status PublicKeyValueApi::Get(::grpc::ServerContext *context,
                                       const ::protos::GetArgs *request,
                                       ::protos::GetReply *reply) {
-  auto key = request->key();
-  auto value_ref = storage_engine_->get(key, <#initializer#>);
+  std::string value = {};
+  storage_engine_->get(request->key(), value);
 
-  if (!value_ref.has_value()) {
-    reply->mutable_status()->set_code(protos::Code::Error);
-  } else {
-    auto value = new protos::Value(value_ref->getValue());
-    reply->set_allocated_value(value);
-    reply->mutable_status()->set_code(protos::Code::Ok);
-  }
+  reply->mutable_status()->set_code(protos::Code::Ok);
+  reply->set_value(value);
 
   return ::grpc::Status::OK;
 }
 ::grpc::Status PublicKeyValueApi::Put(::grpc::ServerContext *context,
                                       const ::protos::PutArgs *request,
                                       ::protos::PutReply *reply) {
-  auto key = request->key();
-  auto value = Value(request->value());
-
-  storage_engine_->put(key, value);
+  storage_engine_->put(request->key(), request->value());
   std::cout << "here7" << std::endl;
 
   reply->mutable_status()->set_code(protos::Code::Ok);
@@ -37,8 +27,8 @@ PublicKeyValueApi::PublicKeyValueApi(std::shared_ptr<Engine> engine)
   return ::grpc::Status::OK;
 }
 
-PublicKeyValueApiServer::PublicKeyValueApiServer(std::shared_ptr<Engine> engine)
-    : service_{std::move(engine)} {
+PublicKeyValueApiServer::PublicKeyValueApiServer(std::shared_ptr<KeyValueService> service)
+    : service_{std::move(service)} {
   grpc::ServerBuilder builder;
   builder.AddListeningPort("0.0.0.0:8080", grpc::InsecureServerCredentials());
 

@@ -27,7 +27,7 @@ class InMemoryRaftManager {
    public:
     InMemoryRaft(const PeerId &id,
                  InMemoryRaftManager &manager,
-                 std::function<void(std::string)> do_command,
+                 std::function<void(Command)> do_command,
                  std::shared_ptr<util::Logger> logger,
                  util::DefaultRandom random);
 
@@ -73,7 +73,7 @@ class InMemoryRaftManager {
   bool allowedToContact(const PeerId &peer_a, const PeerId &peer_b);
 
   std::shared_ptr<InMemoryRaftManager::InMemoryRaft> createPeer(const PeerId &peer_id,
-                                                                const std::function<void(std::string)> &do_command);
+                                                                const std::function<void(Command)> &do_command);
 
   void destroyPeer(PeerId &peer_id);
 

@@ -1,18 +1,20 @@
 #ifndef FLASHPOINT_SRC_INCLUDE_PUBLIC_GRPC_HPP
 #define FLASHPOINT_SRC_INCLUDE_PUBLIC_GRPC_HPP
 
+#include <utility>
+
 #include <grpc/grpc.h>
 #include <grpcpp/server_builder.h>
 
-#include <protos/api.grpc.pb.h>
+#include "protos/api.grpc.pb.h"
 
-#include "storage/engine.hpp"
+#include "keyvalue/keyvalue.hpp"
 
-namespace flashpoint {
+namespace flashpoint::keyvalue {
 
 class PublicKeyValueApi final : public protos::KeyValueApi::Service {
  public:
-  explicit PublicKeyValueApi(std::shared_ptr<Engine>);
+  explicit PublicKeyValueApi(std::shared_ptr<KeyValueService>);
 
   ::grpc::Status Get(::grpc::ServerContext *context,
                      const ::protos::GetArgs *request,
@@ -22,12 +24,12 @@ class PublicKeyValueApi final : public protos::KeyValueApi::Service {
                      ::protos::PutReply *reply) override;
 
  private:
-  std::shared_ptr<Engine> storage_engine_;
+  std::shared_ptr<KeyValueService> storage_engine_;
 };
 
 class PublicKeyValueApiServer {
  public:
-  explicit PublicKeyValueApiServer(std::shared_ptr<Engine>);
+  explicit PublicKeyValueApiServer(std::shared_ptr<KeyValueService>);
   ~PublicKeyValueApiServer();
 
   void Block();

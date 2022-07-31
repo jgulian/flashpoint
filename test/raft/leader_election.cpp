@@ -81,8 +81,15 @@ TEST_F(RaftLeaderElection, QuorumRequirements) {
   ASSERT_STRNE(second_leader_id.c_str(), first_leader_id.c_str());
 
   raft_tester_.disconnect(second_leader_id);
-
-
 }
 
+TEST_F(RaftLeaderElection, BasicAgreement) {
+  auto rafts = raft_tester_.setPeerCount(3);
+  raft_tester_.runRafts();
+
+  for (auto i = 1; i <= 3; i++) {
+    ASSERT_EQ(0, raft_tester_.numCommitted(i));
+
+
+  }
 }

@@ -22,10 +22,15 @@ constexpr auto ElectionTimeout = 1000ms;
 constexpr auto MinSleepTime = 300ms;
 constexpr auto MaxSleepTime = 500ms;
 
+struct Command {
+  LogIndex index;
+  std::string command;
+};
+
 class Raft {
  public:
   explicit Raft(const PeerId &peer_id,
-                std::function<void(std::string)> do_command,
+                std::function<void(Command)> do_command,
                 std::shared_ptr<util::Logger> logger = nullptr,
                 util::DefaultRandom random = {});
 
@@ -103,7 +108,7 @@ class Raft {
   std::thread thread_;
   util::ThreadPool thread_pool_ = util::ThreadPool(6);
 
-  std::function<void(std::string)> do_command_;
+  std::function<void(Command)> do_command_;
   std::shared_ptr<util::Logger> logger_;
 };
 } // namespace flashpoint::raft

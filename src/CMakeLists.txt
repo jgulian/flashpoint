@@ -4,11 +4,12 @@ target_sources(
         PRIVATE
 
         containers/channel.cpp
+        containers/subject.cpp
 
         keyvalue/keyvalue.cpp
         keyvalue/storage/simple_storage.cpp
 
-        public/grpc.cpp
+        keyvalue/grpc.cpp
 
         raft/raft.cpp
         raft/state.cpp

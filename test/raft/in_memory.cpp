@@ -5,7 +5,7 @@ namespace flashpoint::test::raft {
 
 InMemoryRaftManager::InMemoryRaft::InMemoryRaft(const PeerId &id,
                                                 InMemoryRaftManager &manager,
-                                                std::function<void(std::string)> do_command,
+                                                std::function<void(Command)> do_command,
                                                 std::shared_ptr<util::Logger> logger,
                                                 util::DefaultRandom random)
     : Raft(id, std::move(do_command), std::move(logger), random), manager_(manager), id_(id) {}
@@ -98,7 +98,7 @@ bool InMemoryRaftManager::allowedToContact(const PeerId &peer_a, const PeerId &p
 }
 
 std::shared_ptr<InMemoryRaftManager::InMemoryRaft> InMemoryRaftManager::createPeer(const PeerId &peer_id,
-                                                                                   const std::function<void(std::string)> &do_command) {
+                                                                                   const std::function<void(Command)> &do_command) {
   auto raft = std::make_shared<InMemoryRaft>(peer_id, *this, do_command, logger_, random_.generateRandom());
   rafts_[peer_id] = raft;
   partitions_[peer_id] = 0;

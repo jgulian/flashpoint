@@ -6,6 +6,8 @@
 #include <memory>
 #include <unordered_map>
 
+#include "containers/subject.hpp"
+
 #include "util/logger.hpp"
 
 #include "raft/in_memory.hpp"
@@ -25,9 +27,9 @@ class RaftTester {
 
   PeerId createPeer() {
     auto id = std::to_string(current_peer_id_);
-    auto log = std::make_unique<std::vector<std::string>>();
-    auto raft = raft_manager_->createPeer(id, [&log](std::string command) {
-      log->emplace_back(std::move(command));
+    auto log = std::make_unique<std::map<LogIndex, std::string>>();
+    auto raft = raft_manager_->createPeer(id, [&log](Command command) {
+      log->insert({command.index, std::move(command.command)});
     });
     rafts_.emplace(std::move(RaftData({id, raft, std::make_unique<std::mutex>(), std::move(log)})));
     current_peer_id_++;
@@ -108,13 +110,32 @@ class RaftTester {
     return raft_manager_->getDefaultPartition();
   }
 
+  int numCommitted(LogIndex index) {
+    int num_committed = 0;
+    for (auto &raft : rafts_)
+      if (raft.log->contains(index))
+        num_committed++;
+    return num_committed;
+  }
+
+  LogIndex start(std::string command, std::initializer_list<std::string> ids, bool retry = false) {
+    for (auto id : ids) {
+
+    }
+  }
+
+  LogIndex agree(std::string command, std::initializer_list<std::string> ids, bool retry = false) {
+
+  }
+
  private:
   struct RaftData {
    public:
     std::string peer_id;
     std::shared_ptr<InMemoryRaftManager::InMemoryRaft> raft;
-    std::unique_ptr<std::mutex> log_mutex;
-    std::unique_ptr<std::vector<std::string>> log;
+    std::shared_mutex log_mutex;
+    std::unique_ptr<std::map<LogIndex, std::string>> log;
+    containers::Subject<std::reference_wrapper<std::map<LogIndex, std::string>>> log_subject;
   };
 
   friend bool operator<(const RaftTester::RaftData &x, const RaftTester::RaftData &y);

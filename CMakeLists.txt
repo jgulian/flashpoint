@@ -17,7 +17,6 @@ find_package(Threads)
 set(PROTO_FILES
         protos/api.proto
         protos/raft.proto
-        protos/storage.proto
         protos/log.proto
         )
 
