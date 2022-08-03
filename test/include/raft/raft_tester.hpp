@@ -1,9 +1,9 @@
 #ifndef FLASHPOINT_TEST_INCLUDE_RAFT_RAFT_TESTER_HPP_
 #define FLASHPOINT_TEST_INCLUDE_RAFT_RAFT_TESTER_HPP_
 
+#include <memory>
 #include <queue>
 #include <string>
-#include <memory>
 #include <unordered_map>
 
 #include "containers/subject.hpp"
@@ -94,11 +94,11 @@ class RaftTester {
     return term;
   }
 
-  void connect(const PeerId& peer_id, int partition = 0) {
+  void connect(const PeerId &peer_id, int partition = 0) {
     raft_manager_->connect(peer_id, partition);
   }
 
-  int disconnect(const PeerId& peer_id) {
+  int disconnect(const PeerId &peer_id) {
     return raft_manager_->disconnect(peer_id);
   }
 
@@ -120,12 +120,10 @@ class RaftTester {
 
   LogIndex start(std::string command, std::initializer_list<std::string> ids, bool retry = false) {
     for (auto id : ids) {
-
     }
   }
 
   LogIndex agree(std::string command, std::initializer_list<std::string> ids, bool retry = false) {
-
   }
 
  private:
@@ -148,6 +146,6 @@ class RaftTester {
   int current_peer_id_ = 0;
 };
 
-}
+}// namespace flashpoint::test::raft
 
-#endif //FLASHPOINT_TEST_INCLUDE_RAFT_RAFT_TESTER_HPP_
+#endif//FLASHPOINT_TEST_INCLUDE_RAFT_RAFT_TESTER_HPP_
