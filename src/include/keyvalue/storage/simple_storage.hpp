@@ -5,13 +5,15 @@
 
 namespace flashpoint::keyvalue {
 
-    class SimpleStorage : Storage {
-    public:
-        bool doOperation(Operation &operation) override;
+class SimpleStorage : public Storage {
+ public:
+  SimpleStorage() = default;
 
-    private:
-        std::unordered_map<std::string, std::string> storage_ = {};
-    };
+  bool doOperation(Operation &operation) override;
+
+ private:
+  std::unordered_map<std::string, std::string> storage_ = {};
+};
 
 }
 #endif //FLASHPOINT_SIMPLE_STORAGE_HPP

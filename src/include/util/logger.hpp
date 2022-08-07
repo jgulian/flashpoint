@@ -9,9 +9,9 @@
 
 namespace flashpoint::util {
 
-enum LogLevel {
+enum class LogLevel {
   FATAL = 5,
-  ERROR = 4,
+  ERROR2 = 4,
   WARN = 3,
   INFO = 2,
   DEBUG = 1,
@@ -37,21 +37,21 @@ class Logger {
   }
 
   void log(const std::string &message) {
-    msg(INFO, message);
+    msg(LogLevel::INFO, message);
   }
 
   template<typename ... Args>
   void log(const std::string &format, Args... args) {
-    msg(INFO, format, args...);
+    msg(LogLevel::INFO, format, args...);
   }
 
   void err(const std::string &message) {
-    msg(ERROR, message);
+    msg(LogLevel::ERROR2, message);
   }
 
   template<typename ... Args>
   void err(const std::string &format, Args... args) {
-    msg(ERROR, format, args...);
+    msg(LogLevel::ERROR2, format, args...);
   }
 
  protected:
@@ -60,7 +60,7 @@ class Logger {
 
 class SimpleLogger : public Logger {
  public:
-  explicit SimpleLogger(const LogLevel &log_level = INFO);
+  explicit SimpleLogger(const LogLevel &log_level = LogLevel::INFO);
 
   ~SimpleLogger();
 

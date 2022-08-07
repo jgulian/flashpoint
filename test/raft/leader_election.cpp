@@ -2,7 +2,6 @@
 #include <string>
 #include <optional>
 #include <thread>
-#include <format>
 
 #include "gtest/gtest.h"
 
@@ -16,7 +15,7 @@ namespace flashpoint::test::raft {
 
 class RaftLeaderElection : public ::testing::Test {
  public:
-  std::shared_ptr<util::SimpleLogger> logger_ = std::make_unique<util::SimpleLogger>(util::WARN);
+  std::shared_ptr<util::SimpleLogger> logger_ = std::make_unique<util::SimpleLogger>(util::LogLevel::WARN);
   RaftTester raft_tester_;
 
  protected:

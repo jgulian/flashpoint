@@ -1,26 +1,18 @@
-#include "keyvalue/grpc.hpp"
+#include "keyvalue/keyvalue.hpp"
+#include "keyvalue/plugins/grpc.hpp"
+#include "keyvalue/storage/simple_storage.hpp"
 #include "raft/grpc.hpp"
 
 using namespace flashpoint;
 
 int main() {
-
-  std::string database_file = "flashpoint.db";
-  std::string database_log = "flashpoint.log";
+  keyvalue::KeyValueStorageBuilder builder = {};
+  builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
+  builder.addPlugin(std::make_shared<keyvalue::GrpcPlugin>("0.0.0.0:8080", grpc::InsecureServerCredentials()));
 
   //auto server = PublicKeyValueApiServer(std::move(std::reinterpret_pointer_cast<Engine>(engine)));
 
   std::cout << "Serving started..." << std::endl;
-
-  grpc::ServerBuilder builder;
-  builder.AddListeningPort("0.0.0.0:8080", grpc::InsecureServerCredentials());
-
-  //auto raft = raft::GrpcRaft([](const std::string &data) {
-  //  std::cout << data;
-  //});
-
-  auto server = builder.BuildAndStart();
-  server->Wait();
 
   //server.Block();
 

@@ -12,9 +12,11 @@ namespace flashpoint::raft {
 
 class GrpcRaft final : public Raft, public protos::raft::Raft::Service {
  public:
-  explicit GrpcRaft(const PeerId &peer_id, std::function<void(std::string)> do_command);
+  explicit GrpcRaft(const PeerId &peer_id, std::function<void(std::string)> do_command,
+                    std::shared_ptr<util::Logger> logger,
+                    util::DefaultRandom random);
 
-protected:
+ protected:
   bool appendEntries(const PeerId &peer_id, const AppendEntriesRequest &request,
                      AppendEntriesResponse &response) override;
   bool installSnapshot(const PeerId &peer_id, const InstallSnapshotRequest &request,

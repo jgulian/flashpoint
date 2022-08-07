@@ -2,47 +2,64 @@
 
 namespace flashpoint::keyvalue {
 
-    bool Plugin::start(Operation &operation) {
-        return start_fn_(operation);
-    }
+bool Plugin::start(Operation &operation) {
+  return start_fn_(operation);
+}
 
-    bool KeyValueService::put(const std::string &key, const std::string &value) {
-        auto op = Operation{PUT, key + '\0' + value};
-        return forwardOperation(op);
-    }
+void Plugin::addStart(std::function<bool(Operation &)> start) {
+  start_fn_ = std::move(start);
+}
 
-    bool KeyValueService::get(const std::string &key, std::string &value) {
-        auto op = Operation{GET, key};
-        auto ok = forwardOperation(op);
-        if (ok)
-            value = op.request;
-        return ok;
-    }
+bool KeyValueService::put(const std::string &key, const std::string &value) {
+  auto op = Operation{PUT, key + '\0' + value};
+  return start(op);
+}
 
-    bool KeyValueService::forwardOperation(Operation &operation) {
-        for (auto &plugin: plugins_)
-            if (!plugin->forward(operation))
-                return false;
-        return storage_->doOperation(operation);
-    }
+bool KeyValueService::get(const std::string &key, std::string &value) {
+  auto op = Operation{GET, key};
+  auto ok = start(op);
+  if (ok)
+    value = op.request;
+  return ok;
+}
 
-    KeyValueStorageService *KeyValueStorageService::addStorage(std::shared_ptr<Storage> storage) {
-        if (storage_.has_value())
-            throw std::runtime_error("key value service already has storage");
+bool KeyValueService::start(Operation &operation) {
+  for (auto &plugin : plugins_)
+    if (!plugin->forward(operation))
+      return false;
+  return storage_->doOperation(operation);
+}
 
-        storage_ = std::move(storage);
-        return this;
-    }
+void KeyValueService::setPlugins(std::list<std::shared_ptr<Plugin>> plugins) {
+  plugins_ = std::move(plugins);
+}
 
-    KeyValueStorageService *KeyValueStorageService::addPlugin(std::shared_ptr<Plugin> plugin) {
-        plugins_.emplace_back(std::move(plugin));
-        return this;
-    }
+KeyValueStorageBuilder *KeyValueStorageBuilder::addStorage(std::shared_ptr<Storage> storage) {
+  if (storage_.has_value())
+    throw std::runtime_error("key value service already has storage");
 
-    KeyValueService KeyValueStorageService::build() {
-        if (!storage_.has_value())
-            throw std::runtime_error("key value must have storage");
+  storage_ = std::move(storage);
+  return this;
+}
 
-        return KeyValueService(storage_.value(), plugins_);
-    }
+KeyValueStorageBuilder *KeyValueStorageBuilder::addPlugin(std::shared_ptr<Plugin> plugin) {
+  plugins_.emplace_back(std::move(plugin));
+  return this;
+}
+
+std::shared_ptr<KeyValueService> KeyValueStorageBuilder::build() {
+  if (!storage_.has_value())
+    throw std::runtime_error("key value must have storage");
+
+  auto service = std::make_shared<KeyValueService>(storage_.value());
+
+  std::list<std::shared_ptr<Plugin>> plugins = {};
+  for (auto &plugin : plugins_) {
+    plugin->addStart([service](Operation &operation) -> bool { return service->start(operation); });
+    plugins.emplace_back(plugin);
+  }
+  service->setPlugins(plugins);
+
+  return service;
+}
 }

@@ -1,9 +1,14 @@
 #include "raft/grpc.hpp"
+#include "keyvalue/operation.hpp"
+#include "keyvalue/plugins/grpc.hpp"
+
 
 namespace flashpoint::raft {
 
-GrpcRaft::GrpcRaft(const PeerId &peer_id, std::function<void(std::string)> do_command)
-    : Raft(peer_id, std::move(do_command)), lock_{} {}
+GrpcRaft::GrpcRaft(const PeerId &peer_id, std::function<void(std::string)> do_command,
+                   std::shared_ptr<util::Logger> logger,
+                   util::DefaultRandom random)
+    : Raft(peer_id, std::move(do_command), std::move(logger), random), lock_{} {}
 
 bool GrpcRaft::appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
@@ -43,4 +48,6 @@ GrpcRaft::GrpcPeer::GrpcPeer(const std::string &target) : lock() {
 GrpcRaft::GrpcPeer::GrpcPeer(GrpcRaft::GrpcPeer &&other) noexcept
     : channel(std::move(other.channel)), stub(std::move(other.stub)), lock() {}
 
-} // namespace flashpoint::raft
+}// namespace flashpoint::raft
+
+// namespace flashpoint::raft

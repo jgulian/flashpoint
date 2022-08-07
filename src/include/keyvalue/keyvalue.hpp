@@ -9,52 +9,62 @@
 #include "operation.hpp"
 
 namespace flashpoint::keyvalue {
-    class Plugin {
-    public:
-        explicit Plugin(std::function<bool(Operation &operation)> start) : start_fn_(std::move(start)) {}
-        Plugin(const Plugin& plugin) = delete;
+class KeyValueStorageBuilder;
 
-        virtual bool forward(Operation &operation) = 0;
+class Plugin {
+  friend KeyValueStorageBuilder;
 
-    protected:
-        bool start(Operation &operation);
+ public:
+  Plugin() = default;
+  Plugin(const Plugin &plugin) = delete;
 
-    private:
-        std::function<bool(Operation &operation)> start_fn_;
-    };
+  virtual bool forward(Operation &operation) = 0;
+
+ protected:
+  bool start(Operation &operation);
+
+ private:
+  void addStart(std::function<bool(Operation &operation)> start);
+
+  std::function<bool(Operation &operation)> start_fn_;
+};
 
     class Storage {
     public:
-        Storage(const Storage& storage) = delete;
+     Storage() = default;
+     Storage(const Storage &storage) = delete;
 
-        virtual bool doOperation(Operation &operation) = 0;
+     virtual bool doOperation(Operation &operation) = 0;
     };
 
     class KeyValueService {
-    public:
-        explicit KeyValueService(std::shared_ptr<Storage> storage, std::list<std::shared_ptr<Plugin>> plugins)
-        : storage_(std::move(storage)), plugins_(std::move(plugins)) {}
+      friend KeyValueStorageBuilder;
 
-        bool put(const std::string &key, const std::string &value);
-        bool get(const std::string &key, std::string &value);
+     public:
+      explicit KeyValueService(std::shared_ptr<Storage> storage) : storage_(std::move(storage)) {}
 
-    private:
-        bool forwardOperation(Operation &operation);
+      bool start(Operation &operation);
 
-        std::shared_ptr<Storage> storage_;
-        std::list<std::shared_ptr<Plugin>> plugins_;
+      bool put(const std::string &key, const std::string &value);
+      bool get(const std::string &key, std::string &value);
+
+     private:
+      void setPlugins(std::list<std::shared_ptr<Plugin>> plugins);
+
+      std::shared_ptr<Storage> storage_;
+      std::list<std::shared_ptr<Plugin>> plugins_;
     };
 
-    class KeyValueStorageService {
-    public:
-        KeyValueStorageService *addStorage(std::shared_ptr<Storage> storage);
-        KeyValueStorageService *addPlugin(std::shared_ptr<Plugin> plugin);
+    class KeyValueStorageBuilder {
+     public:
+      KeyValueStorageBuilder *addStorage(std::shared_ptr<Storage> storage);
+      KeyValueStorageBuilder *addPlugin(std::shared_ptr<Plugin> plugin);
 
-        KeyValueService build();
+      std::shared_ptr<KeyValueService> build();
 
-    private:
-        std::list<std::shared_ptr<Plugin>> plugins_;
-        std::optional<std::shared_ptr<Storage>> storage_;
+     private:
+      std::list<std::shared_ptr<Plugin>> plugins_;
+      std::optional<std::shared_ptr<Storage>> storage_;
     };
 }
 
