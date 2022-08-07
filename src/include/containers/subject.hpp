@@ -2,15 +2,17 @@
 #define FLASHPOINT_SRC_INCLUDE_CONTAINERS_SUBJECT_HPP_
 
 #include <functional>
-#include <utility>
 #include <map>
+#include <mutex>
+#include <optional>
 #include <shared_mutex>
+#include <utility>
 
 namespace flashpoint::containers {
 
 using SubId = unsigned long;
 
-template <typename T>
+template<typename T>
 class Subject {
 
   Subject() {
