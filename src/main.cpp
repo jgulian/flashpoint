@@ -1,3 +1,7 @@
+#include <CLI/App.hpp>
+#include <CLI/Formatter.hpp>
+#include <CLI/Config.hpp>
+
 #include "keyvalue/keyvalue.hpp"
 #include "keyvalue/plugins/grpc.hpp"
 #include "keyvalue/storage/simple_storage.hpp"
@@ -6,6 +10,9 @@
 using namespace flashpoint;
 
 int main() {
+  CLI::App app{"Flashpoint key/value db"};
+
+
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
   builder.addPlugin(std::make_shared<keyvalue::GrpcPlugin>("0.0.0.0:8080", grpc::InsecureServerCredentials()));

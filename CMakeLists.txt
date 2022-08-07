@@ -7,8 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MACOSX_RPATH 1)
 
 add_library(flashpoint_lib)
-add_executable(flashpoint)
-add_subdirectory(src)
+
+include(FetchContent)
 
 find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
@@ -34,13 +34,26 @@ protobuf_generate(TARGET proto LANGUAGE cpp)
 protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
 
 target_link_libraries(flashpoint_lib proto)
-target_link_libraries(flashpoint flashpoint_lib)
+
+# APPLICATION
+
+FetchContent_Declare(
+        cli11
+        GIT_REPOSITORY https://github.com/CLIUtils/CLI11
+        GIT_TAG        v2.2.0
+)
+
+FetchContent_MakeAvailable(cli11)
+
+add_executable(flashpoint)
+add_subdirectory(src)
+
+target_link_libraries(flashpoint flashpoint_lib CLI11::CLI11)
 
 # TESTING
 
 enable_testing()
 
-include(FetchContent)
 FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git

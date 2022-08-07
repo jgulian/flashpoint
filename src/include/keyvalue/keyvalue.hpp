@@ -5,6 +5,7 @@
 #include <list>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 
 #include "operation.hpp"
 
