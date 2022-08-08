@@ -11,7 +11,6 @@ target_sources(
 
         keyvalue/keyvalue.cpp
         keyvalue/storage/simple_storage.cpp
-        keyvalue/plugins/grpc.cpp
 
         raft/raft.cpp
         raft/state.cpp

@@ -1,6 +1,4 @@
 #include "raft/grpc.hpp"
-#include "keyvalue/operation.hpp"
-#include "keyvalue/plugins/grpc.hpp"
 
 
 namespace flashpoint::raft {

@@ -5,9 +5,12 @@
 #include <CLI/Config.hpp>
 #include <CLI/Formatter.hpp>
 
+#include <grpcpp/server_builder.h>
+
 #include "keyvalue/keyvalue.hpp"
-#include "keyvalue/plugins/grpc.hpp"
 #include "keyvalue/storage/simple_storage.hpp"
+
+#include "cmd/server.hpp"
 
 namespace flashpoint::cmd {
 

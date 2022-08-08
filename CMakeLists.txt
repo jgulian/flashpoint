@@ -24,7 +24,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cli11)
 
 set(PROTO_FILES
-        protos/api.proto
+        protos/kv.proto
         protos/raft.proto
         protos/log.proto
         )

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package protos;
+package protos.kv;
 
 service KeyValueApi {
   rpc Get (GetArgs) returns (GetReply) {}
