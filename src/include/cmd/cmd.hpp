@@ -29,6 +29,7 @@ struct ServerConfigArgs {
 struct GetCommandArgs {
   std::string host_address = "localhost:3308";
   DataOrFileArgs key;
+  std::string output_file = {};
 };
 
 struct PutCommandArgs {
@@ -48,22 +49,22 @@ struct ConnectCommandArgs {
   ServerConfigArgs server_config;
 };
 
-std::pair<CLI::App *, GetCommandArgs> setupGetSubcommand(CLI::App &app);
+CLI::App *setupGetSubcommand(CLI::App &app, GetCommandArgs &command_args);
 
-std::pair<CLI::App *, PutCommandArgs> setupPutSubcommand(CLI::App &app);
+CLI::App *setupPutSubcommand(CLI::App &app, PutCommandArgs &command_args);
 
-std::pair<CLI::App *, StartCommandArgs> setupStartSubcommand(CLI::App &app);
+CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args);
 
-std::pair<CLI::App *, ConnectCommandArgs> setupConnectSubcommand(CLI::App &app);
+CLI::App *setupConnectSubcommand(CLI::App &app, ConnectCommandArgs &command_args);
 
 
-void getCmd(const GetCommandArgs &args);
+void getCmd(CLI::App &get, const GetCommandArgs &args);
 
-void putCmd(const PutCommandArgs &args);
+void putCmd(CLI::App &put, const PutCommandArgs &args);
 
-void startCmd(const StartCommandArgs &args);
+void startCmd(CLI::App &start, const StartCommandArgs &args);
 
-void connectCmd(const ConnectCommandArgs &args);
+void connectCmd(CLI::App &connect, const ConnectCommandArgs &args);
 
 }// namespace flashpoint::cmd
 

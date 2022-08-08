@@ -4,24 +4,33 @@ namespace flashpoint::cmd {
 
 void dataOrFileArgsSetup(CLI::Option_group &group, DataOrFileArgs args, const std::string &option_name) {
   group.add_option("--" + option_name, args.data, option_name);
-  group.add_option("--" + option_name + "-file");
+  group.add_option("--" + option_name + "-file", args.file, option_name + " file");
   group.require_option(1);
 }
 
-std::pair<CLI::App *, GetCommandArgs> setupGetSubcommand(CLI::App &app) {
+void loadDataOrFileArgs(const DataOrFileArgs &args, std::string &data) {
+  if (args.data.empty()) {
+    data = args.data;
+  } else {
+    std::ifstream file;
+    file.open(args.file);
+    file >> data;
+    file.close();
+  }
+}
+
+CLI::App *setupGetSubcommand(CLI::App &app, GetCommandArgs &command_args) {
   CLI::App *get = app.add_subcommand("get");
-  GetCommandArgs command_args = {};
 
   get->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
 
   CLI::Option_group *key_group = get->add_option_group("key");
   dataOrFileArgsSetup(*key_group, command_args.key, "key");
 
-  return {get, command_args};
+  return get;
 }
-std::pair<CLI::App *, PutCommandArgs> setupPutSubcommand(CLI::App &app) {
+CLI::App *setupPutSubcommand(CLI::App &app, PutCommandArgs &command_args) {
   CLI::App *put = app.add_subcommand("put");
-  PutCommandArgs command_args = {};
 
   put->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
 
@@ -30,35 +39,65 @@ std::pair<CLI::App *, PutCommandArgs> setupPutSubcommand(CLI::App &app) {
   CLI::Option_group *value_group = put->add_option_group("value");
   dataOrFileArgsSetup(*value_group, command_args.value, "value");
 
-  return {put, command_args};
+  return put;
 }
-std::pair<CLI::App *, StartCommandArgs> setupStartSubcommand(CLI::App &app) {
+CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args) {
   CLI::App *start = app.add_subcommand("start");
-  StartCommandArgs command_args = {};
 
   start->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
-
   start->add_option("-s,--snapshot", command_args.server_config.snapshot_file, "file to use to store snapshots");
 
-  return {start, command_args};
+  return start;
 }
-std::pair<CLI::App *, ConnectCommandArgs> setupConnectSubcommand(CLI::App &app) {
+CLI::App *setupConnectSubcommand(CLI::App &app, ConnectCommandArgs &command_args) {
   CLI::App *connect = app.add_subcommand("connect");
-  ConnectCommandArgs command_args;
 
   connect->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
   connect->add_option("-p,--peer", command_args.peer_address, "peer address")->required();
 
   connect->add_option("-s,--snapshot", command_args.server_config.snapshot_file, "file to use to store snapshots");
 
-  return {connect, command_args};
+  return connect;
 }
 
-void getCmd(const GetCommandArgs &args) {
+void getCmd(CLI::App &get, const GetCommandArgs &args) {
+  auto channel = grpc::CreateChannel(args.host_address, grpc::InsecureChannelCredentials());
+  auto kv_stub = protos::kv::KeyValueApi::NewStub(channel);
+
+  grpc::ClientContext grpc_context = {};
+  protos::kv::GetArgs grpc_args = {};
+  loadDataOrFileArgs(args.key, *grpc_args.mutable_key());
+  protos::kv::GetReply grpc_reply = {};
+
+  auto ok = true;
+  grpc::Status status = {};
+  try {
+    status = kv_stub->Get(&grpc_context, grpc_args, &grpc_reply);
+  } catch (...) {
+    ok = false;
+  }
+
+
+  std::cout << "here" << std::endl;
+  if (ok && status.ok() && grpc_reply.status().code() == protos::kv::Ok) {
+    std::cout << "key: " << grpc_args.key() << std::endl;
+    if (!args.key.data.empty()) {
+      std::cout << grpc_reply.value();
+    } else {
+      std::ofstream file = {};
+      file.open(args.output_file);
+      file << grpc_reply.value();
+      file.close();
+    }
+  } else if (!status.ok()) {
+    std::cout << "connection failed" << std::endl;
+  } else {
+    std::cout << "get request failed: " << grpc_reply.status().info() << std::endl;
+  }
 }
-void putCmd(const PutCommandArgs &args) {
+void putCmd(CLI::App &put, const PutCommandArgs &args) {
 }
-void startCmd(const StartCommandArgs &args) {
+void startCmd(CLI::App &start, const StartCommandArgs &args) {
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
   //builder.addPlugin(std::make_shared<keyvalue::GrpcPlugin>(args.server_config.peer_server_address, grpc::InsecureServerCredentials()));
@@ -78,7 +117,7 @@ void startCmd(const StartCommandArgs &args) {
   std::cout << "Started api on " << args.host_address << std::endl;
   grpc_api_server->Wait();
 }
-void connectCmd(const ConnectCommandArgs &args) {
+void connectCmd(CLI::App &connect, const ConnectCommandArgs &args) {
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
 
