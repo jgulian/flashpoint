@@ -1,54 +1,27 @@
 #include <CLI/App.hpp>
-#include <CLI/Formatter.hpp>
-#include <CLI/Config.hpp>
 
-#include "keyvalue/keyvalue.hpp"
-#include "keyvalue/plugins/grpc.hpp"
-#include "keyvalue/storage/simple_storage.hpp"
-#include "raft/grpc.hpp"
+#include "cmd/cmd.hpp"
 
 using namespace flashpoint;
-
-int start() {
-  keyvalue::KeyValueStorageBuilder builder = {};
-  builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
-  builder.addPlugin(std::make_shared<keyvalue::GrpcPlugin>("0.0.0.0:8080", grpc::InsecureServerCredentials()));
-
-  //auto server = PublicKeyValueApiServer(std::move(std::reinterpret_pointer_cast<Engine>(engine)));
-
-  std::cout << "Serving started..." << std::endl;
-
-  //server.Block();
-
-  return 0;
-}
 
 int main(int argc, char **argv) {
   CLI::App app{"Flashpoint key/value db"};
 
-  std::string host_address = "0.0.0.0";
-  app.add_option("-a,--address", host_address, "host address");
-  unsigned short port = 3308;
-  app.add_option("-p,--port", port, "port");
-
-  CLI::App *get = app.add_subcommand("get");
-  CLI::App *put = app.add_subcommand("put");
-  CLI::App *start = app.add_subcommand("start");
-  CLI::App *connect = app.add_subcommand("connect");
+  auto [get, get_args] = cmd::setupGetSubcommand(app);
+  auto [put, put_args] = cmd::setupPutSubcommand(app);
+  auto [start, start_args] = cmd::setupStartSubcommand(app);
+  auto [connect, connect_args] = cmd::setupConnectSubcommand(app);
 
   CLI11_PARSE(app, argc, argv);
 
   if (*get) {
-    std::cout << "get" << std::endl;
+    cmd::getCmd(get_args);
   } else if (*put) {
-    std::cout << "put" << std::endl;
-
+    cmd::putCmd(put_args);
   } else if (*start) {
-    std::cout << "start" << std::endl;
-
+    cmd::startCmd(start_args);
   } else if (*connect) {
-    std::cout << "connect" << std::endl;
-
+    cmd::connectCmd(connect_args);
   } else {
     std::cout << app.help() << std::endl;
   }

@@ -15,6 +15,14 @@ find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(Threads)
 
+FetchContent_Declare(
+        cli11
+        GIT_REPOSITORY https://github.com/CLIUtils/CLI11
+        GIT_TAG v2.2.0
+)
+
+FetchContent_MakeAvailable(cli11)
+
 set(PROTO_FILES
         protos/api.proto
         protos/raft.proto
@@ -34,22 +42,13 @@ get_target_property(grpc_cpp_plugin_location gRPC::grpc_cpp_plugin LOCATION)
 protobuf_generate(TARGET proto LANGUAGE cpp)
 protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc PLUGIN "protoc-gen-grpc=${grpc_cpp_plugin_location}")
 
-target_link_libraries(flashpoint_lib proto)
+target_link_libraries(flashpoint_lib proto CLI11::CLI11)
 
 # APPLICATION
-
-FetchContent_Declare(
-        cli11
-        GIT_REPOSITORY https://github.com/CLIUtils/CLI11
-        GIT_TAG        v2.2.0
-)
-
-FetchContent_MakeAvailable(cli11)
-
 add_executable(flashpoint)
 add_subdirectory(src)
 
-target_link_libraries(flashpoint flashpoint_lib CLI11::CLI11)
+target_link_libraries(flashpoint flashpoint_lib)
 
 # TESTING
 

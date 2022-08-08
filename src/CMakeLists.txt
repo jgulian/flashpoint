@@ -3,6 +3,9 @@ target_sources(
         flashpoint_lib
         PRIVATE
 
+        cmd/cmd.cpp
+        cmd/server.cpp
+
         containers/channel.cpp
         containers/subject.cpp
 
