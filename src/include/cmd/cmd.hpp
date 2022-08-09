@@ -58,11 +58,11 @@ CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args);
 CLI::App *setupConnectSubcommand(CLI::App &app, ConnectCommandArgs &command_args);
 
 
-void getCmd(CLI::App &get, const GetCommandArgs &args);
+void getCmd(CLI::App &get, const GetCommandArgs &command_args);
 
 void putCmd(CLI::App &put, const PutCommandArgs &args);
 
-void startCmd(CLI::App &start, const StartCommandArgs &args);
+void startCmd(CLI::App &start, const StartCommandArgs &command_args);
 
 void connectCmd(CLI::App &connect, const ConnectCommandArgs &args);
 

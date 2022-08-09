@@ -10,6 +10,7 @@ service KeyValueApi {
 enum Code {
   Ok = 0;
   Error = 1;
+  NOTFOUND = 2;
 }
 
 message Status {
@@ -33,4 +34,29 @@ message GetArgs {
 message GetReply {
   Status status = 1;
   bytes value = 2;
+}
+
+enum OperationType {
+  GET = 0;
+  PUT = 1;
+}
+
+message GetOperation {
+  GetArgs args = 1;
+  GetReply reply = 2;
+}
+
+message PutOperation {
+  PutArgs args = 1;
+  PutReply reply = 2;
+}
+
+message Operation {
+  OperationType type = 1;
+  Status status = 2;
+
+  oneof data {
+    GetOperation get = 3;
+    PutOperation put = 4;
+  }
 }

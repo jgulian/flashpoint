@@ -60,57 +60,77 @@ CLI::App *setupConnectSubcommand(CLI::App &app, ConnectCommandArgs &command_args
   return connect;
 }
 
-void getCmd(CLI::App &get, const GetCommandArgs &args) {
-  auto channel = grpc::CreateChannel(args.host_address, grpc::InsecureChannelCredentials());
+void getCmd(CLI::App &get, const GetCommandArgs &command_args) {
+  auto channel = grpc::CreateChannel(command_args.host_address, grpc::InsecureChannelCredentials());
   auto kv_stub = protos::kv::KeyValueApi::NewStub(channel);
 
+  std::string key = {};
+  loadDataOrFileArgs(command_args.key, key);
+
   grpc::ClientContext grpc_context = {};
-  auto grpc_args = std::make_unique<protos::kv::GetArgs>();
-  grpc_args->set_key("this is a key  ");
-  //loadDataOrFileArgs(args.key, *grpc_args.mutable_key());
-  auto grpc_reply = std::make_unique<protos::kv::GetReply>();
+  protos::kv::GetArgs args = {};
+  args.set_key(key);
+  protos::kv::GetReply reply = {};
 
-  auto status = kv_stub->Get(&grpc_context, *grpc_args, grpc_reply.get());
+  auto status = kv_stub->Get(&grpc_context, args, &reply);
 
-  std::cout << "here ok: " << status.ok() << std::endl;
-  if (status.ok() && grpc_reply->status().code() == protos::kv::Ok) {
-    std::cout << "key: " << grpc_args->key() << std::endl;
-    if (args.output_file.empty()) {
-      std::cout << "value: " << grpc_reply->value() << std::endl;
+  if (status.ok() && reply.status().code() == protos::kv::Ok) {
+    std::cout << "successful" << std::endl;
+    if (command_args.output_file.empty()) {
+      std::cout << "key: " << args.key() << std::endl
+                << "value: " << reply.value() << std::endl;
     } else {
       std::ofstream file = {};
-      file.open(args.output_file);
-      file << grpc_reply->value();
+      file.open(command_args.output_file);
+      file << reply.value();
       file.close();
     }
   } else if (!status.ok()) {
     std::cout << "connection failed" << std::endl;
   } else {
-    std::cout << "get request failed: " << grpc_reply->status().info() << std::endl;
+    std::cout << "get request failed: " << reply.status().info() << std::endl;
   }
-  std::cout << "freedom at last" << std::endl;
 }
-void putCmd(CLI::App &put, const PutCommandArgs &args) {
+void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
+  auto channel = grpc::CreateChannel(command_args.host_address, grpc::InsecureChannelCredentials());
+  auto kv_stub = protos::kv::KeyValueApi::NewStub(channel);
+
+  std::string key = {}, value = {};
+  loadDataOrFileArgs(command_args.key, key);
+  loadDataOrFileArgs(command_args.value, value);
+
+  grpc::ClientContext grpc_context = {};
+  protos::kv::PutArgs args = {};
+  args.set_key(key);
+  args.set_value(value);
+  protos::kv::PutReply reply = {};
+
+  auto status = kv_stub->Put(&grpc_context, args, &reply);
+
+  if (status.ok() && reply.status().code() == protos::kv::Ok) {
+    std::cout << "successful" << std::endl;
+  } else if (!status.ok()) {
+    std::cout << "connection failed" << std::endl;
+  } else {
+    std::cout << "get request failed: " << reply.status().info() << std::endl;
+  }
 }
-void startCmd(CLI::App &start, const StartCommandArgs &args) {
+void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
-  std::cout << "Serving started..." << std::endl;
 
   auto kv_service = builder.build();
   KeyValueAPI api_service = KeyValueAPI(*kv_service);
 
   grpc::ServerBuilder grpc_server_builder;
-  grpc_server_builder.AddListeningPort(args.host_address, grpc::InsecureServerCredentials());
+  grpc_server_builder.AddListeningPort(command_args.host_address, grpc::InsecureServerCredentials());
   grpc_server_builder.RegisterService(&api_service);
   std::unique_ptr<grpc::Server> grpc_api_server(grpc_server_builder.BuildAndStart());
 
-  std::cout << "Started api on " << args.host_address << std::endl;
-  //getCmd(start, GetCommandArgs{});
+  std::cout << "Started api on " << command_args.host_address << std::endl;
   grpc_api_server->Wait();
-  std::cout << "stopped" << std::endl;
 }
-void connectCmd(CLI::App &connect, const ConnectCommandArgs &args) {
+void connectCmd(CLI::App &connect, const ConnectCommandArgs &command_args) {
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
 

@@ -23,25 +23,17 @@ int main(int argc, char **argv) {
     return app.exit(e);
   }
 
-  std::cout << get_args.host_address << std::endl;
-
-  std::cout << "here" << std::endl;
   if (*get) {
-    std::cout << "get" << std::endl;
     cmd::getCmd(*get, get_args);
   } else if (*put) {
-    std::cout << "put" << std::endl;
     cmd::putCmd(*put, put_args);
   } else if (*start) {
-    std::cout << "start" << std::endl;
     cmd::startCmd(*start, start_args);
   } else if (*connect) {
-    std::cout << "connect" << std::endl;
     cmd::connectCmd(*connect, connect_args);
   } else {
     std::cout << app.help() << std::endl;
   }
-  std::cout << "here1" << std::endl;
 
   return 0;
 }

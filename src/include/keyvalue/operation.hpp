@@ -15,6 +15,7 @@ namespace flashpoint::keyvalue {
         OperationType type;
         std::string request;
         std::string result;
+        std::optional<std::string> error = std::nullopt;
         bool complete = false;
     };
 
