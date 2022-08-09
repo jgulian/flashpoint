@@ -9,7 +9,7 @@ inline void dataOrFileArgsSetup(CLI::Option_group &group, DataOrFileArgs &args, 
 }
 
 void loadDataOrFileArgs(const DataOrFileArgs &args, std::string &data) {
-  if (args.data.empty()) {
+  if (!args.data.empty()) {
     data = args.data;
   } else {
     std::ifstream file;
@@ -70,25 +70,24 @@ void getCmd(CLI::App &get, const GetCommandArgs &command_args) {
   grpc::ClientContext grpc_context = {};
   protos::kv::GetArgs args = {};
   args.set_key(key);
-  protos::kv::GetReply reply = {};
-
+  protos::kv::Operation reply = {};
   auto status = kv_stub->Get(&grpc_context, args, &reply);
 
   if (status.ok() && reply.status().code() == protos::kv::Ok) {
     std::cout << "successful" << std::endl;
     if (command_args.output_file.empty()) {
       std::cout << "key: " << args.key() << std::endl
-                << "value: " << reply.value() << std::endl;
+                << "value: " << reply.get().reply().value() << std::endl;
     } else {
       std::ofstream file = {};
       file.open(command_args.output_file);
-      file << reply.value();
+      file << reply.get().reply().value();
       file.close();
     }
   } else if (!status.ok()) {
     std::cout << "connection failed" << std::endl;
   } else {
-    std::cout << "get request failed: " << reply.status().info() << std::endl;
+    std::cout << "get request failed: " << reply.status().code() << " " << reply.status().info() << std::endl;
   }
 }
 void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
@@ -103,8 +102,7 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   protos::kv::PutArgs args = {};
   args.set_key(key);
   args.set_value(value);
-  protos::kv::PutReply reply = {};
-
+  protos::kv::Operation reply = {};
   auto status = kv_stub->Put(&grpc_context, args, &reply);
 
   if (status.ok() && reply.status().code() == protos::kv::Ok) {
@@ -112,7 +110,7 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   } else if (!status.ok()) {
     std::cout << "connection failed" << std::endl;
   } else {
-    std::cout << "get request failed: " << reply.status().info() << std::endl;
+    std::cout << "put request failed: " << reply.status().code() << " " << reply.status().info() << std::endl;
   }
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {

@@ -12,8 +12,8 @@ class KeyValueAPI final : public protos::kv::KeyValueApi::Service {
  public:
   explicit KeyValueAPI(keyvalue::KeyValueService &service);
 
-  grpc::Status Get(grpc::ServerContext *context, const protos::kv::GetArgs *request, protos::kv::GetReply *response) override;
-  grpc::Status Put(grpc::ServerContext *context, const protos::kv::PutArgs *request, protos::kv::PutReply *response) override;
+  grpc::Status Get(grpc::ServerContext *context, const protos::kv::GetArgs *request, protos::kv::Operation *response) override;
+  grpc::Status Put(grpc::ServerContext *context, const protos::kv::PutArgs *request, protos::kv::Operation *response) override;
 
  private:
   keyvalue::KeyValueService &service_;

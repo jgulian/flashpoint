@@ -2,32 +2,42 @@
 
 namespace flashpoint::keyvalue {
 
-bool Plugin::start(Operation &operation) {
-  return start_fn_(operation);
+void Plugin::start(Operation &operation) {
+  start_fn_(operation);
 }
 
-void Plugin::addStart(std::function<bool(Operation &)> start) {
+void Plugin::addStart(std::function<void(Operation &)> start) {
   start_fn_ = std::move(start);
 }
 
-bool KeyValueService::put(const std::string &key, const std::string &value) {
-  auto op = Operation{PUT, key + '\0' + value};
-  return start(op);
+Operation KeyValueService::put(const std::string &key, const std::string &value) {
+  auto op = Operation();
+  op.mutable_put()->mutable_args()->set_key(key);
+  op.mutable_put()->mutable_args()->set_value(value);
+
+  start(op);
+  return std::move(op);
 }
 
-bool KeyValueService::get(const std::string &key, std::string &value) {
-  auto op = Operation{GET, key};
-  auto ok = start(op);
-  if (ok)
-    value = op.result;
-  return ok;
+Operation KeyValueService::get(const std::string &key) {
+  auto op = Operation();
+  op.mutable_get()->mutable_args()->set_key(key);
+
+  start(op);
+  if (op.status().code() == protos::kv::Code::Ok)
+    op.get().reply().value();
+  return std::move(op);
 }
 
-bool KeyValueService::start(Operation &operation) {
+void KeyValueService::start(Operation &operation) {
+  operation.mutable_status()->set_code(protos::kv::Code::Ok);
   for (auto &plugin : plugins_)
-    if (!plugin->forward(operation))
-      return false;
-  return storage_->doOperation(operation);
+    if (!plugin->forward(operation)) {
+      if (operation.status().code() == protos::kv::Code::Ok)
+        operation.mutable_status()->set_code(protos::kv::Code::Error);
+      return;
+    }
+  storage_->doOperation(operation);
 }
 
 void KeyValueService::setPlugins(std::list<std::shared_ptr<Plugin>> plugins) {
@@ -55,7 +65,7 @@ std::shared_ptr<KeyValueService> KeyValueStorageBuilder::build() {
 
   std::list<std::shared_ptr<Plugin>> plugins = {};
   for (auto &plugin : plugins_) {
-    plugin->addStart([service](Operation &operation) -> bool { return service->start(operation); });
+    plugin->addStart([service](Operation &operation) { service->start(operation); });
     plugins.emplace_back(plugin);
   }
   service->setPlugins(plugins);

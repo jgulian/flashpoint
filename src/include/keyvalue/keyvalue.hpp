@@ -1,15 +1,18 @@
 #ifndef FLASHPOINT_KEYVALUE_HPP
 #define FLASHPOINT_KEYVALUE_HPP
 
+#include <protos/kv.pb.h>
+
 #include <functional>
 #include <list>
 #include <memory>
 #include <optional>
 #include <unordered_map>
 
-#include "operation.hpp"
-
 namespace flashpoint::keyvalue {
+using Operation = protos::kv::Operation;
+using Status = protos::kv::Status;
+
 class KeyValueStorageBuilder;
 
 class Plugin {
@@ -22,12 +25,12 @@ class Plugin {
   virtual bool forward(Operation &operation) = 0;
 
  protected:
-  bool start(Operation &operation);
+  void start(Operation &operation);
 
  private:
-  void addStart(std::function<bool(Operation &operation)> start);
+  void addStart(std::function<void(Operation &operation)> start);
 
-  std::function<bool(Operation &operation)> start_fn_;
+  std::function<void(Operation &operation)> start_fn_;
 };
 
     class Storage {
@@ -44,10 +47,10 @@ class Plugin {
      public:
       explicit KeyValueService(std::shared_ptr<Storage> storage) : storage_(std::move(storage)) {}
 
-      bool start(Operation &operation);
+      void start(Operation &operation);
 
-      bool put(const std::string &key, const std::string &value);
-      bool get(const std::string &key, std::string &value);
+      Operation put(const std::string &key, const std::string &value);
+      Operation get(const std::string &key);
 
      private:
       void setPlugins(std::list<std::shared_ptr<Plugin>> plugins);

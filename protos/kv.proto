@@ -3,14 +3,15 @@ syntax = "proto3";
 package protos.kv;
 
 service KeyValueApi {
-  rpc Get (GetArgs) returns (GetReply) {}
-  rpc Put (PutArgs) returns (PutReply) {}
+  rpc Get (GetArgs) returns (Operation) {}
+  rpc Put (PutArgs) returns (Operation) {}
 }
 
 enum Code {
   Ok = 0;
   Error = 1;
-  NOTFOUND = 2;
+  InvalidOperation = 2;
+  KeyNotFound = 3;
 }
 
 message Status {
@@ -23,22 +24,12 @@ message PutArgs {
   bytes value = 2;
 }
 
-message PutReply {
-  Status status = 1;
-}
-
 message GetArgs {
   string key = 2;
 }
 
 message GetReply {
-  Status status = 1;
   bytes value = 2;
-}
-
-enum OperationType {
-  GET = 0;
-  PUT = 1;
 }
 
 message GetOperation {
@@ -48,15 +39,13 @@ message GetOperation {
 
 message PutOperation {
   PutArgs args = 1;
-  PutReply reply = 2;
 }
 
 message Operation {
-  OperationType type = 1;
-  Status status = 2;
+  Status status = 1;
 
   oneof data {
-    GetOperation get = 3;
-    PutOperation put = 4;
+    GetOperation get = 2;
+    PutOperation put = 3;
   }
 }

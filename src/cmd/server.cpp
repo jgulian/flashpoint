@@ -4,22 +4,15 @@ namespace flashpoint::cmd {
 
 KeyValueAPI::KeyValueAPI(keyvalue::KeyValueService &service) : service_(service) {}
 
-grpc::Status KeyValueAPI::Get(grpc::ServerContext *context, const protos::kv::GetArgs *request, protos::kv::GetReply *response) {
-  std::string value = {};
-  bool ok = service_.get(request->key(), value);
-  response->set_value(value);
-  response->mutable_status()->set_code(ok ? protos::kv::Code::Ok : protos::kv::Code::Error);
-  response->mutable_status()->set_info("none");
-  if (!ok)
-    response->set_value("");
-
+grpc::Status KeyValueAPI::Get(grpc::ServerContext *context, const protos::kv::GetArgs *request, keyvalue::Operation *response) {
+  auto operation = service_.get(request->key());
+  response->CopyFrom(operation);
   return grpc::Status::OK;
 }
-grpc::Status KeyValueAPI::Put(grpc::ServerContext *context, const protos::kv::PutArgs *request, protos::kv::PutReply *response) {
-  bool ok = service_.put(request->key(), request->value());
-  response->mutable_status()->set_code(ok ? protos::kv::Code::Ok : protos::kv::Code::Error);
+grpc::Status KeyValueAPI::Put(grpc::ServerContext *context, const protos::kv::PutArgs *request, keyvalue::Operation *response) {
+  response->mutable_put()->mutable_args()->CopyFrom(*request);
+  service_.start(*response);
 
-  std::cout << "put here" << std::endl;
   return grpc::Status::OK;
 }
 
