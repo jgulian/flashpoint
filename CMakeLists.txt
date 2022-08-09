@@ -8,8 +8,6 @@ set(CMAKE_MACOSX_RPATH 1)
 set(ABSL_PROPAGATE_CXX_STD ON)
 
 
-# these were the cmake options used when it worked: -DgRPC_INSTALL=ON -DgRPC_PROTOBUF_PACKAGE_TYPE=CONFIG
-
 IF (WIN32)
     link_libraries(ws2_32 wsock32)
 ELSE ()
@@ -92,4 +90,3 @@ gtest_discover_tests(flashpoint_test)
 
 
 add_executable(playground main.cpp)
-target_link_libraries(playground PUBLIC flashpoint_lib)

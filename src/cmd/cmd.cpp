@@ -2,7 +2,7 @@
 
 namespace flashpoint::cmd {
 
-void dataOrFileArgsSetup(CLI::Option_group &group, DataOrFileArgs args, const std::string &option_name) {
+inline void dataOrFileArgsSetup(CLI::Option_group &group, DataOrFileArgs &args, const std::string &option_name) {
   group.add_option("--" + option_name, args.data, option_name);
   group.add_option("--" + option_name + "-file", args.file, option_name + " file");
   group.require_option(1);
