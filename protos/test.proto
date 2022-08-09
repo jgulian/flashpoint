@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package protos.test;
+
+service TestAPI {
+  rpc Op (OpArgs) returns (OpReply) {}
+}
+
+message OpArgs {
+  string arg = 1;
+}
+
+message OpReply {
+  string reply = 1;
+}

@@ -65,45 +65,36 @@ void getCmd(CLI::App &get, const GetCommandArgs &args) {
   auto kv_stub = protos::kv::KeyValueApi::NewStub(channel);
 
   grpc::ClientContext grpc_context = {};
-  protos::kv::GetArgs grpc_args = {};
-  loadDataOrFileArgs(args.key, *grpc_args.mutable_key());
-  protos::kv::GetReply grpc_reply = {};
+  auto grpc_args = std::make_unique<protos::kv::GetArgs>();
+  grpc_args->set_key("this is a key  ");
+  //loadDataOrFileArgs(args.key, *grpc_args.mutable_key());
+  auto grpc_reply = std::make_unique<protos::kv::GetReply>();
 
-  auto ok = true;
-  grpc::Status status = {};
-  try {
-    status = kv_stub->Get(&grpc_context, grpc_args, &grpc_reply);
-  } catch (...) {
-    ok = false;
-  }
+  auto status = kv_stub->Get(&grpc_context, *grpc_args, grpc_reply.get());
 
-
-  std::cout << "here" << std::endl;
-  if (ok && status.ok() && grpc_reply.status().code() == protos::kv::Ok) {
-    std::cout << "key: " << grpc_args.key() << std::endl;
-    if (!args.key.data.empty()) {
-      std::cout << grpc_reply.value();
+  std::cout << "here ok: " << status.ok() << std::endl;
+  if (status.ok() && grpc_reply->status().code() == protos::kv::Ok) {
+    std::cout << "key: " << grpc_args->key() << std::endl;
+    if (args.output_file.empty()) {
+      std::cout << "value: " << grpc_reply->value() << std::endl;
     } else {
       std::ofstream file = {};
       file.open(args.output_file);
-      file << grpc_reply.value();
+      file << grpc_reply->value();
       file.close();
     }
   } else if (!status.ok()) {
     std::cout << "connection failed" << std::endl;
   } else {
-    std::cout << "get request failed: " << grpc_reply.status().info() << std::endl;
+    std::cout << "get request failed: " << grpc_reply->status().info() << std::endl;
   }
+  std::cout << "freedom at last" << std::endl;
 }
 void putCmd(CLI::App &put, const PutCommandArgs &args) {
 }
 void startCmd(CLI::App &start, const StartCommandArgs &args) {
   keyvalue::KeyValueStorageBuilder builder = {};
   builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
-  //builder.addPlugin(std::make_shared<keyvalue::GrpcPlugin>(args.server_config.peer_server_address, grpc::InsecureServerCredentials()));
-
-  //auto server = PublicKeyValueApiServer(std::move(std::reinterpret_pointer_cast<Engine>(engine)));
-
   std::cout << "Serving started..." << std::endl;
 
   auto kv_service = builder.build();
@@ -112,10 +103,12 @@ void startCmd(CLI::App &start, const StartCommandArgs &args) {
   grpc::ServerBuilder grpc_server_builder;
   grpc_server_builder.AddListeningPort(args.host_address, grpc::InsecureServerCredentials());
   grpc_server_builder.RegisterService(&api_service);
-  std::unique_ptr<grpc::Server> grpc_api_server = grpc_server_builder.BuildAndStart();
+  std::unique_ptr<grpc::Server> grpc_api_server(grpc_server_builder.BuildAndStart());
 
   std::cout << "Started api on " << args.host_address << std::endl;
+  //getCmd(start, GetCommandArgs{});
   grpc_api_server->Wait();
+  std::cout << "stopped" << std::endl;
 }
 void connectCmd(CLI::App &connect, const ConnectCommandArgs &args) {
   keyvalue::KeyValueStorageBuilder builder = {};

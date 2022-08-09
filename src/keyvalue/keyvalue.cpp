@@ -19,7 +19,7 @@ bool KeyValueService::get(const std::string &key, std::string &value) {
   auto op = Operation{GET, key};
   auto ok = start(op);
   if (ok)
-    value = op.request;
+    value = op.result;
   return ok;
 }
 
