@@ -27,6 +27,11 @@ struct Command {
   std::string command;
 };
 
+struct StartedEntry {
+  LogIndex index;
+  std::shared_ptr<std::promise<bool>> fulfilled;
+};
+
 class Raft {
  public:
   explicit Raft(const PeerId &peer_id,
@@ -36,7 +41,6 @@ class Raft {
   ~Raft();
 
 
-
   void run();
 
   void kill();
@@ -44,8 +48,7 @@ class Raft {
   void forceKill();
 
 
-
-  std::pair<LogIndex, bool> start(const std::string &data);
+  std::optional<StartedEntry> start(const std::string &data);
 
   bool snapshot(LogIndex last_included_index, const std::string &snapshot);
 
@@ -108,6 +111,7 @@ class Raft {
 
   std::function<void(Command)> do_command_;
 };
+
 } // namespace flashpoint::raft
 
 #endif // FLASHPOINT_RAFT_RAFT_H_

@@ -2,14 +2,15 @@
 #define FLASHPOINT_RAFT_STATE_H_
 
 #include <functional>
+#include <future>
 #include <list>
 #include <optional>
 #include <shared_mutex>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <protos/raft.pb.h>
-#include <unordered_map>
-#include <utility>
 
 #include "util.hpp"
 
@@ -27,7 +28,10 @@ enum Role {
   FOLLOWER,
 };
 
-using LogEntry = protos::raft::LogEntry;
+struct LogEntry {
+  protos::raft::LogEntry data;
+  std::shared_ptr<std::promise<bool>> fulfilled;
+};
 
 template<typename T>
 using OptionalRef = std::optional<std::reference_wrapper<T>>;
@@ -95,7 +99,7 @@ class State {
 
   bool cutLogToIndex(LogIndex index);
 
-  void appendToLog(const LogEntry &entry);
+  void appendToLog(LogEntry entry);
 
 
   LogIndex getCommitIndex() const;
@@ -152,7 +156,7 @@ class State {
   std::optional<PeerId> voted_for_ = std::nullopt;
   Role role_ = FOLLOWER;
   LogIndex log_offset_ = 0, log_size_ = 1;
-  std::unique_ptr<std::vector<protos::raft::LogEntry>> log_;
+  std::unique_ptr<std::vector<LogEntry>> log_;
 
   // Volatile
   LogIndex commit_index_ = 0, last_applied_ = 0;

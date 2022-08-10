@@ -7,11 +7,15 @@
 
 namespace flashpoint::keyvalue::plugins {
 
-class RaftKV {
+class RaftKVPlugin : public Plugin {
+ public:
+  explicit RaftKVPlugin(const std::string &peer_address);
 
+
+  bool forward(Operation &operation) override;
 
  private:
-  raft::GrpcRaft raft_;
+  std::unique_ptr<raft::GrpcRaft> raft_;
 };
 
 }// namespace flashpoint::keyvalue::plugins

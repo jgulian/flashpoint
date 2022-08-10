@@ -1,4 +1,5 @@
 #include "raft/raft.hpp"
+#include "keyvalue/keyvalue.hpp"
 
 #include <utility>
 
@@ -31,21 +32,21 @@ void Raft::forceKill() {
   }
 }
 
-std::pair<LogIndex, bool> Raft::start(const std::string &data) {
+std::optional<StartedEntry> Raft::start(const std::string &data) {
   auto write_lock = state_.acquireWriteLock();
   if (state_.getRole() != LEADER)
-    return {0, false};
+    return std::nullopt;
 
   auto [last_log_index, _] = state_.getLastLogInfo();
 
   LogEntry entry = {};
-  entry.set_index(last_log_index + 1);
-  entry.set_term(state_.getCurrentTerm());
-  entry.set_rsm_data(data);
-  entry.set_command_valid(false);
+  entry.data.set_index(last_log_index + 1);
+  entry.data.set_term(state_.getCurrentTerm());
+  entry.data.set_rsm_data(data);
+  entry.data.set_command_valid(false);
   state_.appendToLog(entry);
 
-  return {entry.index(), true};
+  return StartedEntry{entry.data.index(), entry.fulfilled};
 }
 
 bool Raft::snapshot(LogIndex last_included_index, const std::string &snapshot) {
@@ -98,13 +99,12 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     util::LOGGER->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
     return;
   } else if (auto conflict_entry = state_.atLogIndex(request.prev_log_index());
-      !conflict_entry.has_value() ||
-          conflict_entry->get().term() != request.prev_log_term()) {
-    response.set_conflict_term(conflict_entry->get().term());
+             !conflict_entry.has_value() || conflict_entry->get().data.term() != request.prev_log_term()) {
+    response.set_conflict_term(conflict_entry->get().data.term());
     LogIndex i = request.prev_log_index();
     while (true) {
       auto entry = state_.atLogIndex(i);
-      if (!entry.has_value() || entry->get().term() == request.prev_log_term())
+      if (!entry.has_value() || entry->get().data.term() == request.prev_log_term())
         break;
       i--;
     }
@@ -120,7 +120,7 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
 
   state_.cutLogToIndex(request.prev_log_index() + 1);
   for (auto &entry : request.entries())
-    state_.appendToLog(entry);
+    state_.appendToLog({entry, std::make_unique<std::promise<bool>>()});
 
   util::LOGGER->log("%s: successful append entries from %s", state_.me().c_str(), request.leader_id().c_str());
 
@@ -310,12 +310,12 @@ void Raft::commitEntries() {
     if (!entry.has_value())
       throw std::runtime_error("no such log entry");
 
-    if (entry->get().has_rsm_data())
+    if (entry->get().data.has_rsm_data()) {
       do_command_({
-                      entry->get().index(),
-                      entry->get().rsm_data(),
-                  });
-    else {
+          entry->get().data.index(),
+          entry->get().data.rsm_data(),
+      });
+    } else {
       std::unordered_map<std::string, std::string> additions;
       std::unordered_set<std::string> removals;
       state_.configChanges(entry->get(), additions, removals);
@@ -324,6 +324,7 @@ void Raft::commitEntries() {
       for (auto peer_id : removals)
         unregisterPeer(peer_id);
     }
+    entry->get().fulfilled->set_value(true);
   }
 }
 } // namespace flashpoint::raft

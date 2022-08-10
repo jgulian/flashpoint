@@ -6,10 +6,11 @@ namespace flashpoint::raft {
 
 State::State(const PeerId &peer_id) : me_(peer_id), log_(std::make_unique<std::vector<LogEntry>>()) {
   auto entry = LogEntry();
-  entry.set_command_valid(true);
-  entry.set_term(0);
-  entry.set_index(0);
-  entry.set_rsm_data("");
+  entry.data.set_command_valid(true);
+  entry.data.set_term(0);
+  entry.data.set_index(0);
+  entry.data.set_rsm_data("");
+  entry.fulfilled->set_value(true);
   log_->push_back(entry);
 }
 
@@ -43,7 +44,7 @@ void State::setLogSize(LogIndex log_size) { log_size_ = log_size; }
 
 std::pair<LogIndex, LogTerm> State::getLastLogInfo() const {
   auto &log = *log_->end();
-  return {log.index(), log.term()};
+  return {log.data.index(), log.data.term()};
 }
 
 OptionalRef<LogEntry> State::atLogIndex(LogIndex log_index) const {
@@ -58,7 +59,7 @@ OptionalRef<LogEntry> State::atLogIndex(LogIndex log_index) const {
   return log_->at(log_index - log_offset_);
 }
 
-const std::vector<protos::raft::LogEntry> &State::getLog() const {
+const std::vector<LogEntry> &State::getLog() const {
   return *log_;
 }
 
@@ -68,16 +69,20 @@ bool State::cutLogToIndex(LogIndex index) {
   if (log_size_ <= index)
     return false;
 
-  log_->erase(log_->begin() + static_cast<int>(index - log_offset_), log_->end());
+  auto delete_count = log_size_ - index;
+  for (auto i = 0; i < delete_count; i++) {
+    log_->back().fulfilled->set_value(false);
+    log_->pop_back();
+  }
+
   log_size_ = index;
   return true;
 }
 
-void State::appendToLog(const LogEntry &entry) {
-  log_->emplace_back(entry);
+void State::appendToLog(LogEntry entry) {
+  log_->emplace_back(std::move(entry));
   log_size_++;
 }
-
 
 
 LogIndex State::getCommitIndex() const { return commit_index_; }
@@ -115,7 +120,7 @@ void State::getAppendEntriesRequest(const PeerId &peer_id,
     throw std::runtime_error("should have installed snapshot");
 
   request.set_prev_log_index(match_index);
-  request.set_prev_log_term(match_log->get().term());
+  request.set_prev_log_term(match_log->get().data.term());
 
   //TODO: use next index to add entries
 
@@ -147,13 +152,13 @@ void State::setPeerIndices(const PeerId &peer_id,
 void State::configChanges(const LogEntry &entry,
                           std::unordered_map<std::string, std::string> &additions,
                           std::unordered_set<std::string> &removals) {
-  if (!entry.has_config())
+  if (!entry.data.has_config())
     throw std::runtime_error("entry is not a configuration change");
 
   for (auto &peer : peers_)
     removals.insert(peer.first);
 
-  for (const auto &peer_data : entry.config().entries()) {
+  for (const auto &peer_data : entry.data.config().entries()) {
     if (removals.contains(peer_data.first))
       removals.erase(peer_data.first);
     else {
