@@ -31,7 +31,6 @@ class Raft {
  public:
   explicit Raft(const PeerId &peer_id,
                 std::function<void(Command)> do_command,
-                std::shared_ptr<util::Logger> logger = nullptr,
                 util::DefaultRandom random = {});
 
   ~Raft();
@@ -109,7 +108,6 @@ class Raft {
   util::ThreadPool thread_pool_ = util::ThreadPool(6);
 
   std::function<void(Command)> do_command_;
-  std::shared_ptr<util::Logger> logger_;
 };
 } // namespace flashpoint::raft
 

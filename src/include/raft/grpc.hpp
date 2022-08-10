@@ -13,7 +13,6 @@ namespace flashpoint::raft {
 class GrpcRaft final : public Raft, public protos::raft::Raft::Service {
  public:
   explicit GrpcRaft(const PeerId &peer_id, std::function<void(Command)> do_command,
-                    std::shared_ptr<util::Logger> logger,
                     util::DefaultRandom random);
 
  protected:

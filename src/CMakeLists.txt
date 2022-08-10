@@ -10,6 +10,7 @@ target_sources(
         containers/subject.cpp
 
         keyvalue/keyvalue.cpp
+        keyvalue/plugins/raft.cpp
         keyvalue/storage/simple_storage.cpp
 
         raft/raft.cpp

@@ -6,9 +6,8 @@ namespace flashpoint::raft {
 
 Raft::Raft(const PeerId &peer_id,
            std::function<void(Command)> do_command,
-           std::shared_ptr<util::Logger> logger,
            util::DefaultRandom random)
-    : state_(peer_id), do_command_(std::move(do_command)), logger_(std::move(logger)), random_(random) {}
+    : state_(peer_id), do_command_(std::move(do_command)), random_(random) {}
 
 Raft::~Raft() {
   forceKill();
@@ -84,10 +83,10 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
 
   if (request.term() < current_term) {
     response.set_success(false);
-    logger_->log("%s, %d: failed append entries from %s",
-                 state_.me().c_str(),
-                 state_.getCurrentTerm(),
-                 request.leader_id().c_str());
+    util::LOGGER->log("%s, %d: failed append entries from %s",
+                      state_.me().c_str(),
+                      state_.getCurrentTerm(),
+                      request.leader_id().c_str());
     return;
   }
 
@@ -96,7 +95,7 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     response.set_conflict_index(last_log_index + 1);
     response.set_conflict_term(-1);
     response.set_success(false);
-    logger_->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
+    util::LOGGER->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
     return;
   } else if (auto conflict_entry = state_.atLogIndex(request.prev_log_index());
       !conflict_entry.has_value() ||
@@ -112,10 +111,10 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     response.set_conflict_index(i);
     response.set_success(false);
 
-    logger_->log("%s, %d: failed append entries from %s",
-                 state_.me().c_str(),
-                 state_.getCurrentTerm(),
-                 request.leader_id().c_str());
+    util::LOGGER->log("%s, %d: failed append entries from %s",
+                      state_.me().c_str(),
+                      state_.getCurrentTerm(),
+                      request.leader_id().c_str());
     return;
   }
 
@@ -123,7 +122,7 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
   for (auto &entry : request.entries())
     state_.appendToLog(entry);
 
-  logger_->log("%s: successful append entries from %s", state_.me().c_str(), request.leader_id().c_str());
+  util::LOGGER->log("%s: successful append entries from %s", state_.me().c_str(), request.leader_id().c_str());
 
   last_log_index = std::get<0>(state_.getLastLogInfo());
   state_.setCommitIndex(
@@ -159,14 +158,14 @@ void Raft::receiveRequestVote(const RequestVoteRequest &request,
       (request.last_log_term() == last_log_term &&
           request.last_log_index() < last_log_index)) {
     response.set_vote_granted(false);
-    logger_->log("%s: denied vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
+    util::LOGGER->log("%s: denied vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
     return;
   }
 
   state_.receivedHeartbeat();
   response.set_vote_granted(true);
   state_.setVotedFor(request.candidate_id());
-  logger_->log("%s: granted vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
+  util::LOGGER->log("%s: granted vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
 }
 
 
@@ -188,16 +187,16 @@ void Raft::worker() {
       auto term = state_.getCurrentTerm();
 
       if (role == FOLLOWER) {
-        logger_->log("%s, %d: I am a follower", state_.me().c_str(), state_.getCurrentTerm());
+        util::LOGGER->log("%s, %d: I am a follower", state_.me().c_str(), state_.getCurrentTerm());
         if (std::chrono::system_clock::now() - state_.getLastHeartbeat() > ElectionTimeout) {
-          logger_->log("%s: I wish to become the leader", state_.me().c_str());
+          util::LOGGER->log("%s: I wish to become the leader", state_.me().c_str());
           auto new_term = term + 1;
           state_.setCurrentTerm(new_term);
           state_.setRole(CANDIDATE);
           thread_pool_.newTask([this, new_term]() -> void { leaderElection(new_term); }); // TODO: fix
         }
       } else if (role == LEADER) {
-        logger_->log("%s, %d: I am the leader", state_.me().c_str(), state_.getCurrentTerm());
+        util::LOGGER->log("%s, %d: I am the leader", state_.me().c_str(), state_.getCurrentTerm());
         state_.receivedHeartbeat();
         raiseCommitIndex();
         for (const auto &peer : state_.getPeers()) {
@@ -213,7 +212,7 @@ void Raft::worker() {
     if (std::chrono::system_clock::now() < current_time + sleep_for)
       std::this_thread::sleep_until(current_time + sleep_for);
     else
-      logger_->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
+      util::LOGGER->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
   }
 }
 
@@ -284,7 +283,7 @@ void Raft::leaderElection(LogTerm term) {
 
 void Raft::updateFollower(const PeerId &peer_id) {
 
-  logger_->log("%s: appending entries to follower: %s", state_.me().c_str(), peer_id.c_str());
+  util::LOGGER->log("%s: appending entries to follower: %s", state_.me().c_str(), peer_id.c_str());
 
   AppendEntriesRequest request;
   {

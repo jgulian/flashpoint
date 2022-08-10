@@ -4,9 +4,8 @@
 namespace flashpoint::raft {
 
 GrpcRaft::GrpcRaft(const PeerId &peer_id, std::function<void(Command)> do_command,
-                   std::shared_ptr<util::Logger> logger,
                    util::DefaultRandom random)
-    : Raft(peer_id, std::move(do_command), std::move(logger), random), lock_{} {}
+    : Raft(peer_id, std::move(do_command), random), lock_{} {}
 
 bool GrpcRaft::appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
