@@ -28,8 +28,8 @@ class GrpcRaft final : public Raft, public protos::raft::Raft::Service {
 
 private:
   struct GrpcPeer {
-    GrpcPeer(const std::string& target);
-    GrpcPeer(GrpcPeer&& other) noexcept;
+    explicit GrpcPeer(const std::string &target);
+    GrpcPeer(GrpcPeer &&other) noexcept;
 
     std::shared_ptr<grpc::Channel> channel;
     std::unique_ptr<protos::raft::Raft::Stub> stub;

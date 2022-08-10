@@ -11,21 +11,39 @@ bool GrpcRaft::appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
                              AppendEntriesResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
+  auto &peer = peers_.at(peer_id);
 
-  return false;
+  grpc::ClientContext client_context;
+  auto status = peer.stub->AppendEntries(&client_context, request, &response);
+  if (!status.ok())
+    util::LOGGER->msg(util::LogLevel::WARN, "Grpc raft failed to call client: %s", status.error_message().c_str());
+
+  return status.ok();
 }
 bool GrpcRaft::installSnapshot(const PeerId &peer_id,
                                const InstallSnapshotRequest &request,
                                InstallSnapshotResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
+  auto &peer = peers_.at(peer_id);
 
-  return false;
+  grpc::ClientContext client_context;
+  auto status = peer.stub->InstallSnapshot(&client_context, request, &response);
+  if (!status.ok())
+    util::LOGGER->msg(util::LogLevel::WARN, "Grpc raft failed to call client: %s", status.error_message().c_str());
+
+  return status.ok();
 }
 bool GrpcRaft::requestVote(const PeerId &peer_id, const RequestVoteRequest &request,
                            RequestVoteResponse &response) {
   std::shared_lock<std::shared_mutex> lk(lock_);
+  auto &peer = peers_.at(peer_id);
 
-  return false;
+  grpc::ClientContext client_context;
+  auto status = peer.stub->RequestVote(&client_context, request, &response);
+  if (!status.ok())
+    util::LOGGER->msg(util::LogLevel::WARN, "Grpc raft failed to call client: %s", status.error_message().c_str());
+
+  return status.ok();
 }
 
 void GrpcRaft::registerPeer(const PeerId &peer_id, const std::string &target) {
@@ -36,6 +54,7 @@ void GrpcRaft::registerPeer(const PeerId &peer_id, const std::string &target) {
 }
 void GrpcRaft::unregisterPeer(const PeerId &peer_id) {
   std::unique_lock<std::shared_mutex> lk(lock_);
+  peers_.erase(peer_id);
 }
 
 GrpcRaft::GrpcPeer::GrpcPeer(const std::string &target) : lock() {
