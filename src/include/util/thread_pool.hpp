@@ -32,7 +32,7 @@ public:
     return promise->get_future();
   }
 
-private:
+ private:
   void worker();
 
   std::atomic<bool> running_ = true;
@@ -40,6 +40,8 @@ private:
   std::vector<std::thread> threads_ = {};
 };
 
-} // namespace flashpoint::util
+static std::unique_ptr<ThreadPool> THREAD_POOL;
 
-#endif // FLASHPOINT_SRC_INCLUDE_UTIL_THREAD_POOL_HPP
+}// namespace flashpoint::util
+
+#endif// FLASHPOINT_SRC_INCLUDE_UTIL_THREAD_POOL_HPP

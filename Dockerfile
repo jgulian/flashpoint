@@ -1,4 +1,6 @@
-FROM docker/cxx
+FROM alpine
+
+RUN apk add gcc cmake
 
 WORKDIR /server
 

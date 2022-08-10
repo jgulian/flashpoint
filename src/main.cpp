@@ -1,8 +1,15 @@
 #include <CLI/App.hpp>
 
 #include "cmd/cmd.hpp"
+#include "util/logger.hpp"
+#include "util/thread_pool.hpp"
 
 using namespace flashpoint;
+
+void setup_globals() {
+  util::LOGGER = std::make_unique<util::SimpleLogger>();
+  util::THREAD_POOL = std::make_unique<util::ThreadPool>(4);
+}
 
 int main(int argc, char **argv) {
   CLI::App app{"Flashpoint key/value db"};

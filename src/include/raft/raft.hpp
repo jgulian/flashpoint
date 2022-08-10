@@ -105,7 +105,6 @@ class Raft {
 
   std::atomic<bool> running_;
   std::thread thread_;
-  util::ThreadPool thread_pool_ = util::ThreadPool(6);
 
   std::function<void(Command)> do_command_;
 };

@@ -3,21 +3,11 @@
 namespace flashpoint::util {
 
 SimpleLogger::SimpleLogger(const LogLevel &log_level) : Logger(log_level) {
-  thread_ = std::thread([this]() {
-    while (true) {
-      try {
-        auto message = message_channel_.read();
-        std::cout << message;
-      } catch (const std::runtime_error &e) {
-        break;
-      }
-    }
-  });
+  THREAD_POOL->newTask([this]() { this->worker(); });
 }
 
 SimpleLogger::~SimpleLogger() {
   message_channel_.close();
-  thread_.join();
 }
 
 void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
@@ -71,28 +61,19 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
 
   message_channel_.write(std::move(log_message));
 }
+
+void SimpleLogger::worker() {
+  for (int i = 0; i < 10; i++) {
+    try {
+      auto message = message_channel_.tryRead();
+      if (!message.has_value())
+        break;
+      std::cout << message.value();
+    } catch (const std::runtime_error &e) {
+      std::cout << "Logger closing after error: " << e.what() << std::endl;
+      return;
+    }
+  }
+  THREAD_POOL->newTask([this]() { this->worker(); });
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}// namespace flashpoint::util

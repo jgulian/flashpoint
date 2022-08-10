@@ -193,7 +193,7 @@ void Raft::worker() {
           auto new_term = term + 1;
           state_.setCurrentTerm(new_term);
           state_.setRole(CANDIDATE);
-          thread_pool_.newTask([this, new_term]() -> void { leaderElection(new_term); }); // TODO: fix
+          util::THREAD_POOL->newTask([this, new_term]() -> void { leaderElection(new_term); });// TODO: fix
         }
       } else if (role == LEADER) {
         util::LOGGER->log("%s, %d: I am the leader", state_.me().c_str(), state_.getCurrentTerm());
@@ -202,7 +202,7 @@ void Raft::worker() {
         for (const auto &peer : state_.getPeers()) {
           if (state_.me() == peer.first) continue;
           auto peer_id = peer.first;
-          thread_pool_.newTask([this, peer_id]() { updateFollower(peer_id); });
+          util::THREAD_POOL->newTask([this, peer_id]() { updateFollower(peer_id); });
         }
       }
       commitEntries();
@@ -237,7 +237,7 @@ void Raft::leaderElection(LogTerm term) {
       auto peer_id = peer_data.first;
       if (peer_id == state_.me()) continue;
 
-      auto future = thread_pool_.newTask([this, peer_id, &request, &channel]() {
+      auto future = util::THREAD_POOL->newTask([this, peer_id, &request, &channel]() {
         RequestVoteResponse response;
         auto ok = requestVote(peer_id, request, response);
 

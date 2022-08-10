@@ -6,6 +6,7 @@
 
 #include "containers/channel.hpp"
 
+#include "util/thread_pool.hpp"
 
 namespace flashpoint::util {
 
@@ -21,6 +22,8 @@ enum class LogLevel {
 class Logger {
  public:
   explicit Logger(const LogLevel &log_level) : log_level_(log_level) {}
+
+  virtual ~Logger() = default;
 
   virtual void msg(LogLevel log_level, const std::string &message) = 0;
 
@@ -62,17 +65,18 @@ class SimpleLogger : public Logger {
  public:
   explicit SimpleLogger(const LogLevel &log_level = LogLevel::INFO);
 
-  ~SimpleLogger();
+  ~SimpleLogger() override;
 
   void msg(LogLevel log_level, const std::string &message) override;
 
+  void worker();
+
  private:
   containers::QueueChannel<std::string> message_channel_ = {};
-  std::thread thread_;
   bool supports_colored_text_ = true;
 };
 
-std::unique_ptr<Logger> LOGGER;
+static std::unique_ptr<Logger> LOGGER;
 
 }// namespace flashpoint::util
 
