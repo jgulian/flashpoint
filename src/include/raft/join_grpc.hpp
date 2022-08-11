@@ -8,7 +8,7 @@
 
 namespace flashpoint::raft {
 
-bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer_data, GrpcRaft &raft);
+bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer_data, const std::function<GrpcRaft &()> &start_raft);
 
 void handleJoinCluster(const protos::raft::JoinClusterRequest &request, protos::raft::JoinClusterResponse &response);
 

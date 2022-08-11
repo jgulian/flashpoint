@@ -102,10 +102,7 @@ LeaderConnection connectToClusterLeader(const std::string &candidate_data, const
   return {LeaderConnection::Other};
 }
 
-bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer_data, GrpcRaft &raft) {
-  if (raft.running())
-    raft.forceKill();
-
+bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer_data, const std::function<GrpcRaft &()> &start_raft) {
   const auto &peer_address = known_peer_data;
   std::atomic<bool> failed = false;
 
@@ -114,6 +111,7 @@ bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer
   if (failed || cluster_data.failure != LeaderConnection::NONE)
     return false;
 
+  auto &raft = start_raft();
   raft.run();
   while (raft.running() && !raft.canVote())
     std::this_thread::yield();

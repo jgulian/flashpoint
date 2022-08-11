@@ -8,6 +8,7 @@
 #include <grpcpp/server_builder.h>
 
 #include "keyvalue/keyvalue.hpp"
+#include "keyvalue/plugins/raft.hpp"
 #include "keyvalue/storage/simple_storage.hpp"
 
 #include "cmd/server.hpp"
@@ -22,7 +23,7 @@ struct DataOrFileArgs {
 struct ServerConfigArgs {
   std::string snapshot_file;
 
-  bool use_raft = true;
+  bool use_raft = false;
   std::string peer_server_address = "0.0.0.0:3309";
 };
 

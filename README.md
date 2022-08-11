@@ -7,6 +7,7 @@ Todo list
 Pre-release goals
 
 1. Get core service working
+2. Clean up code
 
 Long term todo list
 
