@@ -12,8 +12,8 @@
 #include "containers/channel.hpp"
 #include "raft/state.hpp"
 #include "util/logger.hpp"
-#include "util/thread_pool.hpp"
 #include "util/random.hpp"
+#include "util/thread_pool.hpp"
 
 namespace flashpoint::raft {
 
@@ -33,10 +33,26 @@ struct StartedEntry {
 };
 
 class Raft {
+ protected:
+  std::unique_ptr<State> state_;
+
+ private:
+  util::DefaultRandom random_;
+
+  std::unique_ptr<std::atomic<bool>> running_;
+  std::unique_ptr<std::thread> thread_;
+
+  std::function<void(Command)> do_command_;
+
  public:
-  explicit Raft(const PeerId &peer_id,
-                std::function<void(Command)> do_command,
-                util::DefaultRandom random = {});
+  Raft(const PeerId &peer_id,
+       std::function<void(Command)> do_command,
+       util::DefaultRandom random = {});
+
+  Raft(const PeerId &peer_id,
+       const protos::raft::Config &config,
+       std::function<void(Command)> do_command,
+       util::DefaultRandom random = {});
 
   ~Raft();
 
@@ -46,6 +62,8 @@ class Raft {
   void kill();
 
   void forceKill();
+
+  bool running();
 
 
   std::optional<StartedEntry> start(const std::string &data);
@@ -58,8 +76,9 @@ class Raft {
 
   PeerId getLeaderId();
 
- protected:
+  bool canVote();
 
+ protected:
   virtual bool appendEntries(const PeerId &peer_id,
                              const AppendEntriesRequest &request,
                              AppendEntriesResponse &response) = 0;
@@ -72,13 +91,11 @@ class Raft {
                            RequestVoteResponse &response) = 0;
 
 
-
   virtual void registerPeer(const PeerId &peer_id, const std::string &peer_data) = 0;
 
   virtual void unregisterPeer(const PeerId &peer_id) = 0;
 
   std::pair<LogIndex, bool> startPeer(PeerId &peer_id, std::string data);
-
 
 
   void receiveAppendEntries(const AppendEntriesRequest &request,
@@ -90,7 +107,6 @@ class Raft {
   void receiveRequestVote(const RequestVoteRequest &request,
                           RequestVoteResponse &response);
 
-  State state_;
  private:
   void worker();
 
@@ -101,17 +117,8 @@ class Raft {
   void raiseCommitIndex();
 
   void commitEntries();
-
-
-
-  util::DefaultRandom random_;
-
-  std::atomic<bool> running_;
-  std::thread thread_;
-
-  std::function<void(Command)> do_command_;
 };
 
-} // namespace flashpoint::raft
+}// namespace flashpoint::raft
 
-#endif // FLASHPOINT_RAFT_RAFT_H_
+#endif// FLASHPOINT_RAFT_RAFT_H_

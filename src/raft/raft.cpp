@@ -8,43 +8,49 @@ namespace flashpoint::raft {
 Raft::Raft(const PeerId &peer_id,
            std::function<void(Command)> do_command,
            util::DefaultRandom random)
-    : state_(peer_id), do_command_(std::move(do_command)), random_(random) {}
+    : state_(std::make_unique<State>(peer_id)), do_command_(std::move(do_command)), random_(random) {}
+
+Raft::Raft(const PeerId &peer_id, const Config &config, std::function<void(Command)> do_command, util::DefaultRandom random) : state_(std::make_unique<State>(peer_id, config)), do_command_(std::move(do_command)), random_(random) {}
 
 Raft::~Raft() {
   forceKill();
 }
 
 
-
 void Raft::run() {
   if (!running_) {
-    running_ = true;
-    thread_ = std::thread(&Raft::worker, this);
+    running_ = std::make_unique<std::atomic<bool>>(true);
+    thread_ = std::make_unique<std::thread>(&Raft::worker, this);
   }
 }
 
-void Raft::kill() { running_ = false; }
+void Raft::kill() { running_->store(false); }
 
 void Raft::forceKill() {
   if (running_) {
     kill();
-    thread_.join();
+    thread_->join();
   }
 }
 
+bool Raft::running() {
+  return *running_;
+}
+
 std::optional<StartedEntry> Raft::start(const std::string &data) {
-  auto write_lock = state_.acquireWriteLock();
-  if (state_.getRole() != LEADER)
+  auto write_lock = state_->acquireWriteLock();
+  if (state_->getRole() != LEADER)
     return std::nullopt;
 
-  auto [last_log_index, _] = state_.getLastLogInfo();
+  auto [last_log_index, _] = state_->getLastLogInfo();
 
   LogEntry entry = {};
   entry.data.set_index(last_log_index + 1);
-  entry.data.set_term(state_.getCurrentTerm());
-  entry.data.set_rsm_data(data);
+  entry.data.set_term(state_->getCurrentTerm());
+  entry.data.set_type(protos::raft::CMD);
+  entry.data.set_data(data);
   entry.data.set_command_valid(false);
-  state_.appendToLog(entry);
+  state_->appendToLog(entry);
 
   return StartedEntry{entry.data.index(), entry.fulfilled};
 }
@@ -54,56 +60,61 @@ bool Raft::snapshot(LogIndex last_included_index, const std::string &snapshot) {
 }
 
 std::pair<LogTerm, bool> Raft::getState() const {
-  auto read_lock = state_.acquireReadLock();
-  return {state_.getCurrentTerm(), state_.getRole() == LEADER};
+  auto read_lock = state_->acquireReadLock();
+  return {state_->getCurrentTerm(), state_->getRole() == LEADER};
 }
 
 PeerId Raft::getId() {
-  auto read_lock = state_.acquireReadLock();
-  return state_.me();
+  auto read_lock = state_->acquireReadLock();
+  return state_->me();
 }
 
 PeerId Raft::getLeaderId() {
-  auto read_lock = state_.acquireReadLock();
-  return state_.getLeaderId();
+  auto read_lock = state_->acquireReadLock();
+  return state_->getLeaderId();
 }
 
+bool Raft::canVote() {
+  auto read_lock = state_->acquireReadLock();
+  auto me = state_->me();
+  return state_->findPeer(me).voting();
+}
 
 
 void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
                                 AppendEntriesResponse &response) {
-  auto lock = state_.acquireWriteLock();
-  auto current_term = state_.getCurrentTerm();
+  auto lock = state_->acquireWriteLock();
+  auto current_term = state_->getCurrentTerm();
 
   response.set_term(current_term);
-  if (state_.getCurrentTerm() < request.term()) {
+  if (state_->getCurrentTerm() < request.term()) {
     current_term = request.term();
-    state_.setCurrentTerm(request.term());
-    state_.setRole(FOLLOWER);
+    state_->setCurrentTerm(request.term());
+    state_->setRole(FOLLOWER);
   }
 
   if (request.term() < current_term) {
     response.set_success(false);
     util::LOGGER->log("%s, %d: failed append entries from %s",
-                      state_.me().c_str(),
-                      state_.getCurrentTerm(),
+                      state_->me().c_str(),
+                      state_->getCurrentTerm(),
                       request.leader_id().c_str());
     return;
   }
 
-  auto [last_log_index, _] = state_.getLastLogInfo();
+  auto [last_log_index, _] = state_->getLastLogInfo();
   if (last_log_index < request.prev_log_index()) {
     response.set_conflict_index(last_log_index + 1);
     response.set_conflict_term(-1);
     response.set_success(false);
-    util::LOGGER->log("%s: failed append entries from %s", state_.me().c_str(), request.leader_id().c_str());
+    util::LOGGER->log("%s: failed append entries from %s", state_->me().c_str(), request.leader_id().c_str());
     return;
-  } else if (auto conflict_entry = state_.atLogIndex(request.prev_log_index());
+  } else if (auto conflict_entry = state_->atLogIndex(request.prev_log_index());
              !conflict_entry.has_value() || conflict_entry->get().data.term() != request.prev_log_term()) {
     response.set_conflict_term(conflict_entry->get().data.term());
     LogIndex i = request.prev_log_index();
     while (true) {
-      auto entry = state_.atLogIndex(i);
+      auto entry = state_->atLogIndex(i);
       if (!entry.has_value() || entry->get().data.term() == request.prev_log_term())
         break;
       i--;
@@ -112,22 +123,21 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
     response.set_success(false);
 
     util::LOGGER->log("%s, %d: failed append entries from %s",
-                      state_.me().c_str(),
-                      state_.getCurrentTerm(),
+                      state_->me().c_str(),
+                      state_->getCurrentTerm(),
                       request.leader_id().c_str());
     return;
   }
 
-  state_.cutLogToIndex(request.prev_log_index() + 1);
+  state_->cutLogToIndex(request.prev_log_index() + 1);
   for (auto &entry : request.entries())
-    state_.appendToLog({entry, std::make_unique<std::promise<bool>>()});
+    state_->appendToLog({entry, std::make_unique<std::promise<bool>>()});
 
-  util::LOGGER->log("%s: successful append entries from %s", state_.me().c_str(), request.leader_id().c_str());
+  util::LOGGER->log("%s: successful append entries from %s", state_->me().c_str(), request.leader_id().c_str());
 
-  last_log_index = std::get<0>(state_.getLastLogInfo());
-  state_.setCommitIndex(
-      std::min(request.leader_commit_index(), last_log_index));
-  state_.receivedHeartbeat();
+  last_log_index = std::get<0>(state_->getLastLogInfo());
+  state_->setCommitIndex(std::min(request.leader_commit_index(), last_log_index));
+  state_->receivedHeartbeat();
   response.set_success(true);
 }
 
@@ -136,38 +146,33 @@ void Raft::receiveInstallSnapshot(const InstallSnapshotRequest &request,
 
 void Raft::receiveRequestVote(const RequestVoteRequest &request,
                               RequestVoteResponse &response) {
-  auto lock = state_.acquireWriteLock();
-  auto current_term = state_.getCurrentTerm();
+  auto lock = state_->acquireWriteLock();
+  auto current_term = state_->getCurrentTerm();
 
   response.set_term(current_term);
   if (current_term < request.term()) {
     current_term = request.term();
-    state_.setCurrentTerm(request.term());
-    state_.setVotedFor(std::nullopt);
+    state_->setCurrentTerm(request.term());
+    state_->setVotedFor(std::nullopt);
   }
 
   if (10 < current_term)
     throw std::runtime_error("this is bad");
 
-  auto voted_for = state_.getVotedFor();
-  auto [last_log_index, last_log_term] = state_.getLastLogInfo();
+  auto voted_for = state_->getVotedFor();
+  auto [last_log_index, last_log_term] = state_->getLastLogInfo();
 
-  if (request.term() < current_term ||
-      (voted_for.has_value() && voted_for.value() != request.candidate_id()) ||
-      (request.last_log_term() < last_log_term) ||
-      (request.last_log_term() == last_log_term &&
-          request.last_log_index() < last_log_index)) {
+  if (request.term() < current_term || (voted_for.has_value() && voted_for.value() != request.candidate_id()) || (request.last_log_term() < last_log_term) || (request.last_log_term() == last_log_term && request.last_log_index() < last_log_index)) {
     response.set_vote_granted(false);
-    util::LOGGER->log("%s: denied vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
+    util::LOGGER->log("%s: denied vote request from %s", state_->me().c_str(), request.candidate_id().c_str());
     return;
   }
 
-  state_.receivedHeartbeat();
+  state_->receivedHeartbeat();
   response.set_vote_granted(true);
-  state_.setVotedFor(request.candidate_id());
-  util::LOGGER->log("%s: granted vote request from %s", state_.me().c_str(), request.candidate_id().c_str());
+  state_->setVotedFor(request.candidate_id());
+  util::LOGGER->log("%s: granted vote request from %s", state_->me().c_str(), request.candidate_id().c_str());
 }
-
 
 
 std::pair<LogIndex, bool> Raft::startPeer(PeerId &peer_id, std::string data) {
@@ -175,32 +180,31 @@ std::pair<LogIndex, bool> Raft::startPeer(PeerId &peer_id, std::string data) {
 }
 
 
-
 void Raft::worker() {
   while (running_) {
     auto current_time = std::chrono::system_clock::now();
 
     {
-      auto state_lock = state_.acquireWriteLock();
+      auto state_lock = state_->acquireWriteLock();
 
-      auto role = state_.getRole();
-      auto term = state_.getCurrentTerm();
+      auto role = state_->getRole();
+      auto term = state_->getCurrentTerm();
 
       if (role == FOLLOWER) {
-        util::LOGGER->log("%s, %d: I am a follower", state_.me().c_str(), state_.getCurrentTerm());
-        if (std::chrono::system_clock::now() - state_.getLastHeartbeat() > ElectionTimeout) {
-          util::LOGGER->log("%s: I wish to become the leader", state_.me().c_str());
+        util::LOGGER->log("%s, %d: I am a follower", state_->me().c_str(), state_->getCurrentTerm());
+        if (std::chrono::system_clock::now() - state_->getLastHeartbeat() > ElectionTimeout) {
+          util::LOGGER->log("%s: I wish to become the leader", state_->me().c_str());
           auto new_term = term + 1;
-          state_.setCurrentTerm(new_term);
-          state_.setRole(CANDIDATE);
+          state_->setCurrentTerm(new_term);
+          state_->setRole(CANDIDATE);
           util::THREAD_POOL->newTask([this, new_term]() -> void { leaderElection(new_term); });// TODO: fix
         }
       } else if (role == LEADER) {
-        util::LOGGER->log("%s, %d: I am the leader", state_.me().c_str(), state_.getCurrentTerm());
-        state_.receivedHeartbeat();
+        util::LOGGER->log("%s, %d: I am the leader", state_->me().c_str(), state_->getCurrentTerm());
+        state_->receivedHeartbeat();
         raiseCommitIndex();
-        for (const auto &peer : state_.getPeers()) {
-          if (state_.me() == peer.first) continue;
+        for (const auto &peer : state_->getPeers()) {
+          if (state_->me() == peer.first) continue;
           auto peer_id = peer.first;
           util::THREAD_POOL->newTask([this, peer_id]() { updateFollower(peer_id); });
         }
@@ -223,19 +227,19 @@ void Raft::leaderElection(LogTerm term) {
   std::vector<std::future<void>> futures = {};
 
   {
-    auto state_lock = state_.acquireReadLock();
+    auto state_lock = state_->acquireReadLock();
 
-    if (term != state_.getCurrentTerm())
+    if (term != state_->getCurrentTerm())
       return;
 
-    peer_count = state_.getPeerCount();
-    state_.setVotedFor(state_.me());
-    state_.receivedHeartbeat();
-    state_.getRequestVoteRequest(request);
+    peer_count = state_->getPeerCount();
+    state_->setVotedFor(state_->me());
+    state_->receivedHeartbeat();
+    state_->getRequestVoteRequest(request);
 
-    for (auto &peer_data : state_.getPeers()) {
+    for (auto &peer_data : state_->getPeers()) {
       auto peer_id = peer_data.first;
-      if (peer_id == state_.me()) continue;
+      if (peer_id == state_->me()) continue;
 
       auto future = util::THREAD_POOL->newTask([this, peer_id, &request, &channel]() {
         RequestVoteResponse response;
@@ -258,9 +262,9 @@ void Raft::leaderElection(LogTerm term) {
       vote_count++;
 
     if (term < response.term()) {
-      auto state_lock = state_.acquireWriteLock();
-      state_.setCurrentTerm(response.term());
-      state_.setRole(FOLLOWER);
+      auto state_lock = state_->acquireWriteLock();
+      state_->setCurrentTerm(response.term());
+      state_->setRole(FOLLOWER);
 
       for (auto &future : futures)
         future.wait();
@@ -269,12 +273,12 @@ void Raft::leaderElection(LogTerm term) {
   }
 
   {
-    auto state_lock = state_.acquireWriteLock();
+    auto state_lock = state_->acquireWriteLock();
 
-    if (term == state_.getCurrentTerm() && vote_count > peer_count / 2)
-      state_.setRole(LEADER);
+    if (term == state_->getCurrentTerm() && vote_count > peer_count / 2)
+      state_->setRole(LEADER);
     else
-      state_.setRole(FOLLOWER);
+      state_->setRole(FOLLOWER);
   }
 
   for (auto &future : futures)
@@ -283,12 +287,12 @@ void Raft::leaderElection(LogTerm term) {
 
 void Raft::updateFollower(const PeerId &peer_id) {
 
-  util::LOGGER->log("%s: appending entries to follower: %s", state_.me().c_str(), peer_id.c_str());
+  util::LOGGER->log("%s: appending entries to follower: %s", state_->me().c_str(), peer_id.c_str());
 
   AppendEntriesRequest request;
   {
-    auto read_lock = state_.acquireReadLock();
-    state_.getAppendEntriesRequest(peer_id, request);
+    auto read_lock = state_->acquireReadLock();
+    state_->getAppendEntriesRequest(peer_id, request);
   }
 
   AppendEntriesResponse response = {};
@@ -299,32 +303,26 @@ void Raft::updateFollower(const PeerId &peer_id) {
 }
 
 void Raft::raiseCommitIndex() {
-  state_.setCommitIndex(0);
+  state_->setCommitIndex(0);
 }
 
 void Raft::commitEntries() {
-  auto last_applied = state_.getLastApplied();
-  while (last_applied < state_.getCommitIndex()) {
+  auto last_applied = state_->getLastApplied();
+  while (last_applied < state_->getCommitIndex()) {
     last_applied++;
-    auto entry = state_.atLogIndex(last_applied);
+    auto entry = state_->atLogIndex(last_applied);
     if (!entry.has_value())
       throw std::runtime_error("no such log entry");
 
-    if (entry->get().data.has_rsm_data()) {
+    if (entry->get().data.type() == protos::raft::CMD) {
       do_command_({
           entry->get().data.index(),
-          entry->get().data.rsm_data(),
+          entry->get().data.data(),
       });
     } else {
-      std::unordered_map<std::string, std::string> additions;
-      std::unordered_set<std::string> removals;
-      state_.configChanges(entry->get(), additions, removals);
-      for (auto [peer_id, peer_data] : additions)
-        registerPeer(peer_id, std::move(peer_data));
-      for (auto peer_id : removals)
-        unregisterPeer(peer_id);
+      // Update config info
     }
     entry->get().fulfilled->set_value(true);
   }
 }
-} // namespace flashpoint::raft
+}// namespace flashpoint::raft

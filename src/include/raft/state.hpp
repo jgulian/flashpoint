@@ -53,15 +53,11 @@ class State {
     mutable std::shared_mutex lock_;
   };
 
-  class Configuration {
-    friend State;
-    LogIndex index_;
-    bool committed_;
-    std::unordered_set<PeerId> peers_;
-  };
-
  public:
-  explicit State(const PeerId &peer_id);
+  explicit State(PeerId peer_id);
+
+  State(const PeerId &peer_id, const Config &base_config);
+
 
   PeerId me() const;
 
@@ -136,17 +132,17 @@ class State {
 
   void setPeerIndices(const PeerId &peer_id, std::pair<LogIndex, LogIndex> indices);
 
-  void configChanges(const LogEntry &entry,
-                     std::unordered_map<std::string, std::string> &additions,
-                     std::unordered_set<std::string> &removals);
 
   void commitConfig(LogIndex &index);
 
+  Config getBaseConfig();
+
+  Peer findPeer(const std::string &peer_id);
 
 
   std::unique_lock<std::shared_mutex> acquireWriteLock() const;
 
-  std::unique_lock<std::shared_mutex> acquireReadLock() const;
+  std::shared_lock<std::shared_mutex> acquireReadLock() const;
 
  private:
   mutable std::shared_mutex lock_;
@@ -164,7 +160,8 @@ class State {
   PeerId me_, leader_id_;
 
   std::unordered_map<PeerId, PeerState> peers_ = {};
-  Config config_ = {};
+  Config base_config_ = {};
+  std::list<LogIndex> configs_ = {};
   std::optional<LogIndex> next_config_;
 };
 } // namespace flashpoint::raft

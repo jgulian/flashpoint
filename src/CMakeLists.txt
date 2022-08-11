@@ -13,13 +13,14 @@ target_sources(
         keyvalue/plugins/raft.cpp
         keyvalue/storage/simple_storage.cpp
 
+        raft/grpc.cpp
+        raft/join_grpc.cpp
         raft/raft.cpp
         raft/state.cpp
         raft/util.cpp
 
-        raft/grpc.cpp
-
         util/containers.cpp
+        util/encoding.cpp
         util/thread_pool.cpp
         util/random.cpp
         util/logger.cpp

@@ -12,8 +12,16 @@ namespace flashpoint::raft {
 
 class GrpcRaft final : public Raft, public protos::raft::Raft::Service {
  public:
-  explicit GrpcRaft(const PeerId &peer_id, std::function<void(Command)> do_command,
-                    util::DefaultRandom random);
+  GrpcRaft(const PeerId &peer_id, std::function<void(Command)> do_command,
+           util::DefaultRandom random);
+
+  GrpcRaft(const PeerId &peer_id, const protos::raft::Config &config, std::function<void(Command)> do_command,
+           util::DefaultRandom random);
+
+  grpc::Status AppendEntries(::grpc::ServerContext *context, const ::protos::raft::AppendEntriesRequest *request, ::protos::raft::AppendEntriesResponse *response) override;
+  grpc::Status RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request, ::protos::raft::RequestVoteResponse *response) override;
+  grpc::Status InstallSnapshot(::grpc::ServerContext *context, const ::protos::raft::InstallSnapshotRequest *request, ::protos::raft::InstallSnapshotResponse *response) override;
+  grpc::Status JoinCluster(::grpc::ServerContext *context, const ::protos::raft::JoinClusterRequest *request, ::protos::raft::JoinClusterResponse *response) override;
 
  protected:
   bool appendEntries(const PeerId &peer_id, const AppendEntriesRequest &request,
@@ -36,7 +44,7 @@ private:
     std::shared_mutex lock = {};
   };
 
-  std::shared_mutex lock_ = {};
+  std::unique_ptr<std::shared_mutex> lock_ = {};
   std::unordered_map<PeerId, GrpcPeer> peers_;
 };
 

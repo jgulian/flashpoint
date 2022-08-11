@@ -1,24 +1,29 @@
 #include "raft/state.hpp"
 #include <unordered_map>
+#include <utility>
 
 namespace flashpoint::raft {
 
 
-State::State(const PeerId &peer_id) : me_(peer_id), log_(std::make_unique<std::vector<LogEntry>>()) {
+State::State(PeerId peer_id) : me_(std::move(peer_id)), log_(std::make_unique<std::vector<LogEntry>>()) {
   auto entry = LogEntry();
   entry.data.set_command_valid(true);
   entry.data.set_term(0);
   entry.data.set_index(0);
-  entry.data.set_rsm_data("");
+  entry.data.set_type(protos::raft::CMD);
+  entry.data.set_data("");
   entry.fulfilled->set_value(true);
   log_->push_back(entry);
 }
+
+State::State(const PeerId &peer_id, const Config &base_config) : State(peer_id) { base_config_ = base_config; }
+
 
 PeerId State::me() const { return me_; }
 
 LogTerm State::getCurrentTerm() const { return current_term_; }
 
-void State::setCurrentTerm(LogTerm current_term) {current_term_ = current_term;}
+void State::setCurrentTerm(LogTerm current_term) { current_term_ = current_term; }
 
 std::optional<PeerId> State::getVotedFor() const { return voted_for_; }
 
@@ -28,10 +33,9 @@ Role State::getRole() const { return role_; }
 
 void State::setRole(Role role) { role_ = role; }
 
-const PeerId &State::getLeaderId() const {return leader_id_;}
+const PeerId &State::getLeaderId() const { return leader_id_; }
 
-void State::setLeaderId(const PeerId &leader_id) {leader_id_ = leader_id;}
-
+void State::setLeaderId(const PeerId &leader_id) { leader_id_ = leader_id; }
 
 
 LogIndex State::getLogOffset() const { return log_offset_; }
@@ -149,35 +153,28 @@ void State::setPeerIndices(const PeerId &peer_id,
   peer.next_index_ = indices.second;
 }
 
-void State::configChanges(const LogEntry &entry,
-                          std::unordered_map<std::string, std::string> &additions,
-                          std::unordered_set<std::string> &removals) {
-  if (!entry.data.has_config())
-    throw std::runtime_error("entry is not a configuration change");
-
-  for (auto &peer : peers_)
-    removals.insert(peer.first);
-
-  for (const auto &peer_data : entry.data.config().entries()) {
-    if (removals.contains(peer_data.first))
-      removals.erase(peer_data.first);
-    else {
-      peers_.insert(std::unordered_map<PeerId, PeerState>::value_type({peer_data.first, PeerState(peer_data.first)}));
-      //peers_.insert("a", std::move(PeerState("a")));
-      additions.insert(peer_data);
-    }
-  }
-}
 
 void State::commitConfig(LogIndex &index) {}
+
+Config State::getBaseConfig() {
+  return base_config_;
+}
+
+Peer State::findPeer(const std::string &peer_id) {
+  for (int i = 0; i < base_config_.peers_size(); i++)
+    if (base_config_.peers(i).id() == peer_id)
+      return base_config_.peers(i);
+
+  throw std::runtime_error("peer not found");
+}
 
 
 std::unique_lock<std::shared_mutex> State::acquireWriteLock() const {
   return std::move(std::unique_lock<std::shared_mutex>(lock_));
 }
 
-std::unique_lock<std::shared_mutex> State::acquireReadLock() const {
-  return std::move(std::unique_lock<std::shared_mutex>(lock_));
+std::shared_lock<std::shared_mutex> State::acquireReadLock() const {
+  return std::move(std::shared_lock<std::shared_mutex>(lock_));
 }
 
-} // namespace flashpoint::raft
+}// namespace flashpoint::raft

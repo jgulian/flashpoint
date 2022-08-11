@@ -87,6 +87,3 @@ target_link_libraries(flashpoint_test PUBLIC flashpoint_lib gmock)
 
 include(GoogleTest)
 gtest_discover_tests(flashpoint_test)
-
-
-add_executable(playground main.cpp)
