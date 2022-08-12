@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "raft.hpp"
+#include "raft/join_grpc.hpp"
 
 namespace flashpoint::raft {
 

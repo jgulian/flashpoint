@@ -136,7 +136,7 @@ void Raft::receiveAppendEntries(const AppendEntriesRequest &request,
   util::LOGGER->log("%s: successful append entries from %s", state_->me().c_str(), request.leader_id().c_str());
 
   last_log_index = std::get<0>(state_->getLastLogInfo());
-  state_->setCommitIndex(std::min(request.leader_commit_index(), last_log_index));
+  state_->setCommitIndex(std::min(static_cast<LogIndex>(request.leader_commit_index()), last_log_index));
   state_->receivedHeartbeat();
   response.set_success(true);
 }
@@ -175,7 +175,7 @@ void Raft::receiveRequestVote(const RequestVoteRequest &request,
 }
 
 
-std::pair<LogIndex, bool> Raft::startPeer(PeerId &peer_id, std::string data) {
+std::pair<LogIndex, bool> Raft::startConfig(const Config &config) {
   return std::pair<LogIndex, bool>();
 }
 

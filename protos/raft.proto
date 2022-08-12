@@ -6,8 +6,6 @@ service Raft {
   rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse) {}
   rpc RequestVote (RequestVoteRequest) returns (RequestVoteResponse) {}
   rpc InstallSnapshot (InstallSnapshotRequest) returns (InstallSnapshotResponse) {}
-
-  rpc JoinCluster (JoinClusterRequest) returns (JoinClusterResponse) {}
 }
 
 message Peer {
@@ -23,6 +21,7 @@ message Config {
 enum LogDataType {
   CMD = 0;
   CONFIG = 1;
+  SNAPSHOT = 2;
 }
 
 message LogEntry {
@@ -89,21 +88,4 @@ message InstallSnapshotRequest {
 
 message InstallSnapshotResponse {
   uint32 term = 1;
-}
-
-message JoinClusterRequest {
-  bytes candidate_data = 1;
-}
-
-message JoinClusterResponse {
-  message ClusterInfo {
-    Config config = 1;
-    string granted_id = 2;
-  }
-
-  bool successful = 1;
-  oneof data {
-    Peer leader = 2;
-    ClusterInfo info = 3;
-  }
 }

@@ -16,6 +16,7 @@ target_sources(
         raft/grpc.cpp
         raft/join_grpc.cpp
         raft/raft.cpp
+        raft/raft2.cpp
         raft/state.cpp
         raft/util.cpp
 

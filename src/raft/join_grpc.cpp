@@ -119,7 +119,7 @@ bool joinRaftGrpc(const std::string &host_address, const std::string &known_peer
   return raft.running();
 }
 
-void handleJoinCluster(const JoinClusterRequest &request, JoinClusterResponse &response) {
+bool handleJoinClusterStageOne(const JoinClusterRequest &request, JoinClusterResponse &response) {
   auto candidate_info = parsePeerInfoFromData(request.candidate_data());
 
   auto channel = grpc::CreateChannel(candidate_info.host_address, grpc::InsecureChannelCredentials());
@@ -134,11 +134,12 @@ void handleJoinCluster(const JoinClusterRequest &request, JoinClusterResponse &r
     AppendEntriesResponse ae_response = {};
     auto status = stub->AppendEntries(&client_context, ae_request, &ae_response);
     if (!status.ok())
-      return;
+      return false;
   } catch (...) {
-    return;
+    return false;
   }
 
   response.set_successful(true);
+  return true;
 }
 }// namespace flashpoint::raft

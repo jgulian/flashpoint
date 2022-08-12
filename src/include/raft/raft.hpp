@@ -68,6 +68,8 @@ class Raft {
 
   std::optional<StartedEntry> start(const std::string &data);
 
+  std::pair<LogIndex, bool> startConfig(const Config &config);
+
   bool snapshot(LogIndex last_included_index, const std::string &snapshot);
 
   std::pair<LogTerm, bool> getState() const;
@@ -94,8 +96,6 @@ class Raft {
   virtual void registerPeer(const PeerId &peer_id, const std::string &peer_data) = 0;
 
   virtual void unregisterPeer(const PeerId &peer_id) = 0;
-
-  std::pair<LogIndex, bool> startPeer(PeerId &peer_id, std::string data);
 
 
   void receiveAppendEntries(const AppendEntriesRequest &request,

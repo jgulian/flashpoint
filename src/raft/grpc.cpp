@@ -33,9 +33,16 @@ grpc::Status GrpcRaft::JoinCluster(::grpc::ServerContext *context, const ::proto
   if (leader_id != me) {
     response->set_successful(false);
     response->mutable_leader()->CopyFrom(state_->findPeer(leader_id));
+  } else {
+    bool ok = handleJoinClusterStageOne(*request, *response);
+    if (ok) {
+      start
+    }
   }
 
-  return Service::JoinCluster(context, request, response);
+  util::LOGGER->log("received requst to join cluster");
+
+  return grpc::Status::OK;
 }
 
 bool GrpcRaft::appendEntries(const PeerId &peer_id,
