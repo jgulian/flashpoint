@@ -47,11 +47,7 @@ set(PROTO_FILES
         )
 
 add_library(proto ${PROTO_FILES})
-target_link_libraries(proto
-        PUBLIC
-        protobuf::libprotobuf
-        grpc++
-        )
+target_link_libraries(proto PUBLIC protobuf::libprotobuf grpc++)
 target_include_directories(proto PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
 set(_GRPC_CPP_PLUGIN_EXECUTABLE $<TARGET_FILE:grpc_cpp_plugin>)
@@ -61,7 +57,7 @@ protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grp
 
 # LIBRARY
 add_library(flashpoint_lib)
-target_link_libraries(flashpoint_lib PRIVATE proto CLI11::CLI11)
+target_link_libraries(flashpoint_lib PUBLIC proto CLI11::CLI11)
 
 
 # APPLICATION
