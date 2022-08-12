@@ -11,6 +11,7 @@ Pre-release goals
 
 Long term todo list
 
+* Refactor so Grpc is built into raft. I can figure out testing, but it makes a lot of sense since it's a core feature.
 * increase warnings and generally clean up code
 * don't make raft create a thread.
 * do simple scheduling in thread pool and make logger schedule every second or so

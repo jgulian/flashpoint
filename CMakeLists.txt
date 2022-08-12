@@ -61,14 +61,14 @@ protobuf_generate(TARGET proto LANGUAGE grpc GENERATE_EXTENSIONS .grpc.pb.h .grp
 
 # LIBRARY
 add_library(flashpoint_lib)
-target_link_libraries(flashpoint_lib proto CLI11::CLI11)
+target_link_libraries(flashpoint_lib PRIVATE proto CLI11::CLI11)
 
 
 # APPLICATION
 add_executable(flashpoint)
 add_subdirectory(src)
 
-target_link_libraries(flashpoint flashpoint_lib)
+target_link_libraries(flashpoint PRIVATE flashpoint_lib)
 
 
 # TESTING
@@ -83,7 +83,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(flashpoint_test)
 add_subdirectory(test)
-target_link_libraries(flashpoint_test PUBLIC flashpoint_lib gmock)
+target_link_libraries(flashpoint_test PRIVATE flashpoint_lib gmock)
 
 include(GoogleTest)
 gtest_discover_tests(flashpoint_test)

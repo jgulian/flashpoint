@@ -24,6 +24,9 @@ int main(int argc, char **argv) {
   CLI::App *start = cmd::setupStartSubcommand(app, start_args);
   CLI::App *connect = cmd::setupConnectSubcommand(app, connect_args);
 
+  for (int i = 0; i < argc; i++)
+    std::cout << argv[i] << std::endl;
+
   try {
     app.parse(argc, argv);
   } catch (const CLI::ParseError &e) {
