@@ -21,3 +21,4 @@ Long term todo list
 * start config on leader cmd
 * allow users to disable join cluster rpc
 * allow users to create (yaml) config file for plugins and server
+* use ASan in tests 
