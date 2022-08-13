@@ -11,14 +11,16 @@ Pre-release goals
 
 Long term todo list
 
-* Refactor so Grpc is built into raft. I can figure out testing, but it makes a lot of sense since it's a core feature.
 * increase warnings and generally clean up code
-* don't make raft create a thread.
-* do simple scheduling in thread pool and make logger schedule every second or so
-* allow users to specify how many threads for the thread pool.
 * write tests
 * add clang support
 * start config on leader cmd
-* allow users to disable join cluster rpc
 * allow users to create (yaml) config file for plugins and server
-* use ASan in tests 
+* use ASan in tests
+* rethink threading
+    * It may be good to remove the thread pool and just use grpc
+      * would need to update how updating followers works because it could get messy, although this is definitely possible
+    * if it is not the thread pool should be used as much as possible and the following should be adopted
+        * allow users to specify how many threads for the thread pool.
+        * don't make raft create a thread use a time based scheduler like the next point.
+        * do simple scheduling in thread pool and make logger schedule every second or so
