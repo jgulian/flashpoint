@@ -2,49 +2,44 @@
 #define FLASHPOINT_SRC_INCLUDE_UTIL_RANDOM_H_
 
 #include <chrono>
+#include <memory>
 #include <random>
 
 namespace flashpoint::util {
 
-template<class Generator>
 class Random {
  public:
-  Random() : generator_(std::random_device()()) {}
+  virtual float random() = 0;
+  virtual int randomInt(int a, int b) = 0;
+  virtual std::shared_ptr<Random> seedRandom() = 0;
 
-  explicit Random(std::seed_seq seed) : generator_(seed) {}
+  template<class Duration>
+  Duration randomDurationBetween(Duration min, Duration max) {
+    return std::chrono::duration_cast<Duration>(min + (max - min) * random());
+  }
+};
 
+class MTRandom : public Random {
+ private:
+  std::mt19937 generator_;
+
+ public:
+  MTRandom() : generator_(std::random_device()()) {}
+
+  explicit MTRandom(const std::seed_seq &seed) : generator_(seed) {}
+
+  float random() override { return std::uniform_real_distribution<float>(0, 1)(generator_); }
+
+  int randomInt(int a, int b) override { return std::uniform_int_distribution(a, b)(generator_); }
 
   std::seed_seq generateSeed() {
     std::vector<unsigned long> seed = {};
-    for (int i = 0; i < 8; i++)
-      seed.push_back(unsigned_random_(generator_));
+    for (int i = 0; i < 8; i++) seed.push_back(randomInt(0, 1000));
     return std::seed_seq(seed.begin(), seed.end());
   }
 
-  Random generateRandom() {
-    return Random(generateSeed());
-  }
-
-  float generateUnitUniform() {
-    return unit_uniform_(generator_);
-  }
-
-  template<class Duration>
-  Duration generateDurationBetween(Duration min, Duration max) {
-    return std::chrono::duration_cast<Duration>(min + (max - min) * generateUnitUniform());
-  }
-
-
- private:
-  Generator generator_;
-
-  std::uniform_int_distribution<unsigned int>
-      unsigned_random_ = std::uniform_int_distribution<unsigned int>(0, std::numeric_limits<unsigned int>::max());
-  std::uniform_real_distribution<float> unit_uniform_ = std::uniform_real_distribution<float>(0, 1);
+  std::shared_ptr<Random> seedRandom() override { return std::make_shared<MTRandom>(generateSeed()); }
 };
 
-using DefaultRandom = Random<std::mt19937>;
-
-}
-
-#endif //FLASHPOINT_SRC_INCLUDE_UTIL_RANDOM_H_
+}// namespace flashpoint::util
+#endif//FLASHPOINT_SRC_INCLUDE_UTIL_RANDOM_H_

@@ -19,9 +19,3 @@ Long term todo list
 * use ASan in tests
 * use concurrent channel (like linked list) for apply msg
 * rethink threading
-    * It may be good to remove the thread pool and just use grpc <-- this is the chosen strategy. grpc will switch to using callbacks and reactors.
-      * would need to update how updating followers works because it could get messy, although this is definitely possible
-    * if it is not the thread pool should be used as much as possible and the following should be adopted
-        * allow users to specify how many threads for the thread pool.
-        * don't make raft create a thread use a time based scheduler like the next point.
-        * do simple scheduling in thread pool and make logger schedule every second or so

@@ -6,19 +6,15 @@ target_sources(
         cmd/cmd.cpp
         cmd/server.cpp
 
-        containers/channel.cpp
-        containers/subject.cpp
+        include/containers/channel.cpp
+        include/containers/subject.cpp
 
         keyvalue/keyvalue.cpp
         keyvalue/plugins/raft.cpp
         keyvalue/storage/simple_storage.cpp
 
-        raft/grpc.cpp
-        raft/join_grpc.cpp
+        raft/errors.cpp
         raft/raft.cpp
-        raft/raft2.cpp
-        raft/state.cpp
-        raft/util.cpp
 
         util/containers.cpp
         util/encoding.cpp
