@@ -21,8 +21,8 @@ RaftPeer::RaftPeer(protos::raft::Peer peer, std::shared_ptr<protos::raft::Raft::
     : peer(std::move(peer)), connection(std::move(connection)) {}
 const PeerId &RaftPeer::peerId() const { return peer.id(); }
 
-Raft::Raft(const RaftConfig &config, const protos::raft::RaftState &save_state)
-    : raft_config_(std::make_unique<RaftConfig>(config)) {}
+Raft::Raft(std::unique_ptr<RaftConfig> config, const protos::raft::RaftState &save_state)
+    : raft_config_(std::move(config)) {}
 
 bool Raft::run() {
   bool running = false;
@@ -71,8 +71,10 @@ void Raft::worker() {
           auto new_term = current_term_ + 1;
           current_term_++;
           role_ = CANDIDATE;
-          util::THREAD_POOL->newTask([this, new_term]() -> void { leaderElection(current_term_); });// TODO: fix
+          sent_vote_requests_ = false;
         }
+      } else if (role_ == CANDIDATE) {
+        updateLeaderElection();
       } else if (role_ == LEADER) {
         last_heartbeat_ = std::chrono::system_clock::now();
         updateIndices();
@@ -81,16 +83,42 @@ void Raft::worker() {
       commitEntries();
     }
 
-    auto sleep_for = random_.generateDurationBetween(MinSleepTime, MaxSleepTime);
+    auto sleep_for = raft_config_->random_->randomDurationBetween(MinSleepTime, MaxSleepTime);
     if (std::chrono::system_clock::now() < current_time + sleep_for)
       std::this_thread::sleep_until(current_time + sleep_for);
     else
       util::LOGGER->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
   }
 }
-void Raft::leaderElection(LogIndex expected_term) {
-  std::lock_guard<std::mutex> lock_guard(*lock_);
-  if (expected_term != current_term_) return;
+void Raft::updateLeaderElection() {
+  if (!sent_vote_requests_) {
+    protos::raft::RequestVoteRequest request = {};
+
+    for (const auto &peer : peers_) {
+      if (!peer->active_in_configs.empty()) {
+        peer->last_call = RaftPeer::RequestVoteCall();
+        auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
+        call.client_context = std::make_unique<grpc::ClientContext>();
+        call.request = std::make_unique<protos::raft::RequestVoteRequest>(request);
+        peer->connection->async()->RequestVote(call.client_context.get(), call.request.get(), call.response.get(),
+                                               [&call](const grpc::Status &status) {
+                                                 *call.complete = true;
+                                                 *call.ok = status.ok();
+                                               });
+      }
+    }
+    sent_vote_requests_ = true;
+  } else {
+    for (const auto &peer : peers_) {
+      if (!peer->active_in_configs.empty()) {
+        if (!std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call))
+          throw std::runtime_error("all of a candidate's possible peers must have had a vote requested");
+
+        auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
+        if (call.complete && call.ok) { if (call.response.) }
+      }
+    }
+  }
 }
 void Raft::updateIndices() {
   while (commit_index_ < log_size_) {
@@ -106,23 +134,41 @@ void Raft::updateIndices() {
 
 void Raft::updateFollowers() {
   for (const auto &peer : peers_) {
-    if (me_ == peer.peerId()) continue;
-    auto peer_id = peer.peerId();
-    util::THREAD_POOL->newTask([=]() { updateFollower(peer_id); });
+    if (me_ == peer->peerId()) continue;
+    auto peer_id = peer->peerId();
+    std::visit(RaftPeer::overloaded{[&](std::monostate &) { updateFollower(peer); },
+                                    [&](RaftPeer::AppendEntriesCall &call) {
+                                      if (call.complete) {
+                                        if (call.ok) {
+
+                                        } else {
+                                          updateFollower(peer);
+                                        }
+                                      }
+                                    },
+                                    [&](RaftPeer::InstallSnapshotCall &call) {
+                                      if (call.complete) {
+                                        if (call.ok) {
+
+                                        } else {
+                                          updateFollower(peer);
+                                        }
+                                      }
+                                    },
+                                    [&](RaftPeer::RequestVoteCall &call) {
+                                      if (call.complete) { updateFollower(peer); }
+                                    }},
+               peer->last_call);
   }
 }
-void Raft::updateFollower(const PeerId &peer_id) {
-  lock_->lock();
-  auto &peer = raftPeerWithId(peer_id);
-  auto current_term = current_term_;
-  peer.lock->lock();
-  lock_->unlock();
-
+void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   grpc::ClientContext client_context = {};
   grpc::Status status;
   if (peer.snapshot_id != snapshot_.snapshot_id || peer.chunk_offset != snapshot_.chunk_count) {
     protos::raft::InstallSnapshotRequest request = {};
 
+    thing;
+    thing = peer.connection->AsyncAppendEntries(nullptr, nullptr, nullptr);
 
     protos::raft::InstallSnapshotResponse response = {};
     status = peer.connection->InstallSnapshot(&client_context, request, &response);
@@ -203,17 +249,18 @@ void Raft::updateSnapshot(protos::raft::Snapshot &&snapshot) {}
 
 grpc::ServerWriteReactor<protos::raft::StartResponse> *Raft::Start(::grpc::CallbackServerContext *context,
                                                                    const ::protos::raft::StartRequest *request) {
-
-  if (role_ != LEADER) throw std::runtime_error("can not start on non-leader");
-
   ExtendedLogEntry entry = {};
   entry.base.set_index(log_size_++);
   entry.base.set_term(current_term_);
-  entry.base.set_data(config.SerializeAsString());
+  entry.base.set_data(request->data());
   entry.base.set_type(protos::raft::CONFIG);
   entry.base.set_command_valid(false);
 
-  { std::lock_guard<std::mutex> lock_guard(*lock_); }
+
+  {
+    std::lock_guard<std::mutex> lock_guard(*lock_);
+    // Check if leader and return if not
+  }
 
   return WithCallbackMethod_Start::Start(context, request);
 }
@@ -258,4 +305,6 @@ bool RaftClient::startConfig(const protos::raft::Config &config) {
   request.set_type(protos::raft::CONFIG);
   doRequest(request);
 }
+void Raft::StartResponseReactor::OnWriteDone(bool b) { ServerWriteReactor::OnWriteDone(b); }
+void Raft::StartResponseReactor::OnDone() { ServerWriteReactor::OnDone(); }
 }// namespace flashpoint::raft
