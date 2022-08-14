@@ -17,8 +17,9 @@ Long term todo list
 * start config on leader cmd
 * allow users to create (yaml) config file for plugins and server
 * use ASan in tests
+* use concurrent channel (like linked list) for apply msg
 * rethink threading
-    * It may be good to remove the thread pool and just use grpc
+    * It may be good to remove the thread pool and just use grpc <-- this is the chosen strategy. grpc will switch to using callbacks and reactors.
       * would need to update how updating followers works because it could get messy, although this is definitely possible
     * if it is not the thread pool should be used as much as possible and the following should be adopted
         * allow users to specify how many threads for the thread pool.
