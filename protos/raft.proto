@@ -94,8 +94,6 @@ message InstallSnapshotRequest {
   uint32 chunk_offset = 4;
   bytes chunk = 5;
   bool last_chunk = 6;
-
-  bool done = 7;
 }
 
 message InstallSnapshotResponse {
@@ -107,7 +105,8 @@ message Snapshot {
   uint32 snapshot_id = 1;
   uint64 last_included_index = 2;
   string file = 3;
-  uint32 chunk_count = 4;
+  uint64 file_size = 4;
+  uint32 chunk_count = 5;
 }
 
 message RaftState {

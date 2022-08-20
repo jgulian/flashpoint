@@ -2,14 +2,6 @@
 
 namespace flashpoint::util {
 
-SimpleLogger::SimpleLogger(const LogLevel &log_level) : Logger(log_level) {
-  THREAD_POOL->newTask([this]() { this->worker(); });
-}
-
-SimpleLogger::~SimpleLogger() {
-  message_channel_.close();
-}
-
 void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
   if (log_level == LogLevel::ALL)
     throw std::runtime_error("invalid log level all to log a message");
@@ -58,8 +50,6 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
       case LogLevel::ALL: break;
     }
   }
-
-  message_channel_.write(std::move(log_message));
 }
 
 void SimpleLogger::worker() {

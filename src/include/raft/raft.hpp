@@ -6,6 +6,7 @@
 #include <protos/raft.grpc.pb.h>
 
 #include <filesystem>
+#include <fstream>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -34,6 +35,8 @@ constexpr auto ElectionTimeout = 1000ms;
 constexpr auto MinSleepTime = 300ms;
 constexpr auto MaxSleepTime = 500ms;
 
+const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;
+
 struct RaftConfig {
   protos::raft::Peer me;
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
@@ -55,16 +58,18 @@ struct RaftPeer {
 
   template<class Request, class Response>
   struct Call {
-    std::unique_ptr<grpc::ClientContext> client_context;
-    std::unique_ptr<Request> request;
-    std::unique_ptr<Response> response;
-    std::unique_ptr<std::atomic<bool>> complete = std::make_unique<std::atomic<bool>>(false);
-    std::unique_ptr<std::atomic<bool>> ok = std::make_unique<std::atomic<bool>>(true);
+    grpc::ClientContext client_context = {};
+    Request request = {};
+    Response response = {};
+    std::atomic<bool> complete = false;
+    grpc::Status status = {};
   };
 
-  using AppendEntriesCall = Call<protos::raft::AppendEntriesRequest, protos::raft::AppendEntriesResponse>;
-  using InstallSnapshotCall = Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse>;
-  using RequestVoteCall = Call<protos::raft::RequestVoteRequest, protos::raft::RequestVoteResponse>;
+  using AppendEntriesCall =
+      std::shared_ptr<Call<protos::raft::AppendEntriesRequest, protos::raft::AppendEntriesResponse>>;
+  using InstallSnapshotCall =
+      std::shared_ptr<Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse>>;
+  using RequestVoteCall = std::shared_ptr<Call<protos::raft::RequestVoteRequest, protos::raft::RequestVoteResponse>>;
 
   protos::raft::Peer peer = {};
   LogIndex match_index = 0, next_index = 0;
@@ -72,7 +77,7 @@ struct RaftPeer {
   RaftConnection connection;
   std::list<LogIndex> active_in_configs = {};
 
-  std::variant<AppendEntriesCall, InstallSnapshotCall, RequestVoteCall> last_call;
+  std::variant<std::monostate, AppendEntriesCall, InstallSnapshotCall, RequestVoteCall> last_call = {};
 
  public:
   RaftPeer(protos::raft::Peer peer, RaftConnection connection);
@@ -153,14 +158,15 @@ class Raft : private protos::raft::Raft::CallbackService {
 
   void commitEntries();
 
+  bool checkAllConfigsAgreement(const std::list<PeerId> &agreers);
+
   std::list<PeerId> agreersForIndex(LogIndex index);
 
   RaftPeer &raftPeerWithId(const std::string &id);
 
-  void respectNewLeader(const std::string &leader_id, LogTerm term);
-
   void updateSnapshot(protos::raft::Snapshot &&snapshot);
 
+  void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
 
   grpc::ServerWriteReactor<protos::raft::StartResponse> *Start(::grpc::CallbackServerContext *context,
                                                                const ::protos::raft::StartRequest *request) override;

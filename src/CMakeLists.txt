@@ -6,9 +6,6 @@ target_sources(
         cmd/cmd.cpp
         cmd/server.cpp
 
-        include/containers/channel.cpp
-        include/containers/subject.cpp
-
         keyvalue/keyvalue.cpp
         keyvalue/plugins/raft.cpp
         keyvalue/storage/simple_storage.cpp
@@ -16,9 +13,7 @@ target_sources(
         raft/errors.cpp
         raft/raft.cpp
 
-        util/containers.cpp
         util/encoding.cpp
-        util/thread_pool.cpp
         util/random.cpp
         util/logger.cpp
 )

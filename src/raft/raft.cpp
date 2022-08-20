@@ -14,7 +14,7 @@ bool hasAgreement(const protos::raft::Config &config, const std::list<PeerId> &a
 
 std::unique_ptr<RaftPeer> connectToPeer(protos::raft::Peer peer_data) {
   auto channel = grpc::CreateChannel(peer_data.data().address(), grpc::InsecureChannelCredentials());
-  return std::make_unique<RaftPeer>(std::move(peer_data), std::move(channel));
+  return std::make_unique<RaftPeer>(std::move(peer_data), std::make_shared<protos::raft::Raft::Stub>(channel));
 }
 
 RaftPeer::RaftPeer(protos::raft::Peer peer, std::shared_ptr<protos::raft::Raft::StubInterface> connection)
@@ -50,12 +50,12 @@ bool Raft::snapshot(LogIndex included_index, std::string snapshot_file) {
 
   if (role_ != LEADER) return false;
 
-  SnapshotId chunk_count = (std::filesystem::file_size(std::filesystem::path(snapshot_file)) / 1000000 / 256) + 1;
   protos::raft::Snapshot snapshot = {};
   snapshot.set_snapshot_id(snapshot_.snapshot_id() + 1);
   snapshot.set_last_included_index(included_index);
+  snapshot.set_file_size(std::filesystem::file_size(std::filesystem::path(snapshot_file)));
   snapshot.set_file(std::move(snapshot_file));
-  snapshot.set_chunk_count(chunk_count);
+  snapshot.set_chunk_count((snapshot.file_size() / 1000000 / 256) + 1);
   snapshot_ = std::move(snapshot);
 }
 
@@ -93,42 +93,61 @@ void Raft::worker() {
 void Raft::updateLeaderElection() {
   if (!sent_vote_requests_) {
     protos::raft::RequestVoteRequest request = {};
+    votes_received_.clear();
 
     for (const auto &peer : peers_) {
       if (!peer->active_in_configs.empty()) {
-        peer->last_call = RaftPeer::RequestVoteCall();
-        auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
-        call.client_context = std::make_unique<grpc::ClientContext>();
-        call.request = std::make_unique<protos::raft::RequestVoteRequest>(request);
-        peer->connection->async()->RequestVote(call.client_context.get(), call.request.get(), call.response.get(),
-                                               [&call](const grpc::Status &status) {
-                                                 *call.complete = true;
-                                                 *call.ok = status.ok();
+        auto call = RaftPeer::RequestVoteCall();
+        peer->last_call = call;
+        call->request = request;
+        peer->connection->async()->RequestVote(&call->client_context, &call->request, &call->response,
+                                               [call](const grpc::Status &status) {
+                                                 call->status = status;
+                                                 call->complete = true;
                                                });
       }
     }
     sent_vote_requests_ = true;
   } else {
-    for (const auto &peer : peers_) {
-      if (!peer->active_in_configs.empty()) {
-        if (!std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call))
-          throw std::runtime_error("all of a candidate's possible peers must have had a vote requested");
+    auto remaining_voter_count = 0;
 
-        auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
-        if (call.complete && call.ok) { if (call.response.) }
+    for (const auto &peer : peers_) {
+      if (peer->active_in_configs.empty()) continue;
+      if (!std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call)) continue;
+
+      auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
+      if (!call->complete) {
+        remaining_voter_count++;
+        continue;
       }
+      auto &response = call->response;
+
+      if (response.vote_granted()) {
+        votes_received_.emplace_back(peer->peerId());
+      } else if (current_term_ < response.term()) {
+        current_term_ = response.term();
+        leader_ = response.leader_id();
+        role_ = FOLLOWER;
+        for (const auto &p : peers_) p->last_call = std::monostate();
+        return;
+      }
+    }
+
+    if (checkAllConfigsAgreement(votes_received_)) {
+      role_ = LEADER;
+      for (const auto &p : peers_) {
+        p->match_index = 0;
+        p->next_index = log_size_;
+      }
+    } else if (remaining_voter_count == 0) {
+      role_ = FOLLOWER;
     }
   }
 }
 void Raft::updateIndices() {
   while (commit_index_ < log_size_) {
-    if (!hasAgreement(base_config_, agreersForIndex(commit_index_ + 1))) return;
-
-    for (const auto &config_index : proposed_configs_) {
-      protos::raft::Config config = {};
-      config.ParseFromString(atLogIndex(config_index).base.data());
-      if (!hasAgreement(config, agreersForIndex(commit_index_ + 1))) return;
-    }
+    if (checkAllConfigsAgreement(agreersForIndex(commit_index_ + 1))) return;
+    commit_index_++;
   }
 }
 
@@ -136,71 +155,55 @@ void Raft::updateFollowers() {
   for (const auto &peer : peers_) {
     if (me_ == peer->peerId()) continue;
     auto peer_id = peer->peerId();
-    std::visit(RaftPeer::overloaded{[&](std::monostate &) { updateFollower(peer); },
-                                    [&](RaftPeer::AppendEntriesCall &call) {
-                                      if (call.complete) {
-                                        if (call.ok) {
-
-                                        } else {
-                                          updateFollower(peer);
-                                        }
-                                      }
-                                    },
-                                    [&](RaftPeer::InstallSnapshotCall &call) {
-                                      if (call.complete) {
-                                        if (call.ok) {
-
-                                        } else {
-                                          updateFollower(peer);
-                                        }
-                                      }
-                                    },
-                                    [&](RaftPeer::RequestVoteCall &call) {
-                                      if (call.complete) { updateFollower(peer); }
-                                    }},
-               peer->last_call);
+    if (std::holds_alternative<std::monostate>(peer->last_call)
+        || std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call))
+      updateFollower(peer);
+    else if (std::holds_alternative<RaftPeer::InstallSnapshotCall>(peer->last_call)) {
+      const auto call = std::get<RaftPeer::InstallSnapshotCall>(peer->last_call);
+      if (!call->complete) continue;
+    } else if (std::holds_alternative<RaftPeer::AppendEntriesCall>(peer->last_call)) {
+      const auto call = std::get<RaftPeer::AppendEntriesCall>(peer->last_call);
+      if (!call->complete) continue;
+    }
   }
 }
 void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   grpc::ClientContext client_context = {};
   grpc::Status status;
-  if (peer.snapshot_id != snapshot_.snapshot_id || peer.chunk_offset != snapshot_.chunk_count) {
-    protos::raft::InstallSnapshotRequest request = {};
+  if (peer->snapshot_id != snapshot_.snapshot_id() || peer->chunk_offset != snapshot_.chunk_count()) {
+    auto call = RaftPeer::InstallSnapshotCall();
+    call->request.set_term(current_term_);
+    call->request.set_leader_id(me_);
 
-    thing;
-    thing = peer.connection->AsyncAppendEntries(nullptr, nullptr, nullptr);
+    call->request.set_snapshot_id(snapshot_.snapshot_id());
+    if (peer->snapshot_id != snapshot_.snapshot_id()) call->request.set_chunk_offset(0);
+    else
+      call->request.set_chunk_offset(peer->chunk_offset + 1);
+    fillWithChunk(call->request);
+    call->request.set_last_chunk(call->request.chunk_offset() + 1 == snapshot_.chunk_count());
 
-    protos::raft::InstallSnapshotResponse response = {};
-    status = peer.connection->InstallSnapshot(&client_context, request, &response);
-    if (status.ok()) {
-      if (response.term() != current_term) {
-        respectNewLeader(response.leader_id(), response.term());
-        peer.lock->unlock();
-        return;
-      } else {
-        peer.snapshot_id = request.snapshot_id();
-        peer.chunk_offset = request.chunk_offset();
-      }
-    }
+    peer->connection->async()->InstallSnapshot(&call->client_context, &call->request, &call->response,
+                                               [call](const grpc::Status &status) {
+                                                 call->status = status;
+                                                 call->complete = true;
+                                               });
   } else {
-    protos::raft::AppendEntriesRequest request = {};
+    auto call = RaftPeer::AppendEntriesCall();
+    call->request.set_term(current_term_);
+    call->request.set_leader_id(me_);
+    call->request.set_snapshot_id(snapshot_.snapshot_id());
+    if (peer->snapshot_id != snapshot_.snapshot_id()) call->request.set_chunk_offset(0);
+    else
+      call->request.set_chunk_offset(peer->chunk_offset + 1);
+    fillWithChunk(call->request);
+    call->request.set_last_chunk(call->request.chunk_offset() + 1 == snapshot_.chunk_count());
 
-
-    protos::raft::AppendEntriesResponse response = {};
-    status = peer.connection->AppendEntries(&client_context, request, &response);
-    if (status.ok()) {
-      if (response.term() != current_term) {
-        respectNewLeader(response.leader_id(), response.term());
-        peer.lock->unlock();
-        return;
-      } else if (response.success()) {
-
-      } else {
-      }
-    }
+    peer->connection->async()->AppendEntries(&call->client_context, &call->request, &call->response,
+                                             [call](const grpc::Status &status) {
+                                               call->status = status;
+                                               call->complete = true;
+                                             });
   }
-
-  peer.lock->unlock();
 }
 const Raft::ExtendedLogEntry &Raft::atLogIndex(LogIndex index) {
   if (index < log_offset_) throw RaftException(RaftExceptionType::IndexEarlierThanSnapshot);
@@ -229,6 +232,17 @@ void Raft::commitEntries() {
     last_applied_++;
   }
 }
+bool Raft::checkAllConfigsAgreement(const std::list<PeerId> &agreers) {
+  if (!hasAgreement(base_config_, agreers)) return false;
+
+  for (const auto &config_index : proposed_configs_) {
+    protos::raft::Config config = {};
+    config.ParseFromString(atLogIndex(config_index).base.data());
+    if (!hasAgreement(config, agreers)) return false;
+  }
+
+  return true;
+}
 std::list<PeerId> Raft::agreersForIndex(LogIndex index) {
   std::list<PeerId> result = {};
   for (const auto &peer : peers_)
@@ -239,11 +253,6 @@ Raft::RaftPeer &Raft::raftPeerWithId(const std::string &id) {
   for (auto &peer : peers_)
     if (peer.peerId() == id) return peer;
   throw RaftException(RaftExceptionType::NoSuchPeerWithId);
-}
-void Raft::respectNewLeader(const std::string &leader_id, LogTerm term) {
-  std::lock_guard<std::mutex> lock_guard(*lock_);
-  current_term_ = term;
-  leader_ = leader_id;
 }
 void Raft::updateSnapshot(protos::raft::Snapshot &&snapshot) {}
 
@@ -284,6 +293,22 @@ grpc::ServerUnaryReactor *Raft::InstallSnapshot(::grpc::CallbackServerContext *c
   auto reactor = context->DefaultReactor();
   reactor->Finish(grpc::Status::OK);
   return reactor;
+}
+void Raft::fillWithChunk(protos::raft::InstallSnapshotRequest &request) {
+  if (snapshot_.snapshot_id() != request.snapshot_id())
+    throw std::runtime_error("attempted to fill request with old snapshot");
+
+  std::ifstream snapshot_file = {};
+  snapshot_file.open(snapshot_.file());
+  snapshot_file.seekg(static_cast<long long>(request.chunk_offset() * SnapshotChunkSize));
+
+  auto amount_to_read = SnapshotChunkSize;
+  if (request.chunk_offset() == snapshot_.chunk_count() - 1) amount_to_read = snapshot_.file_size() % SnapshotChunkSize;
+
+  auto chunk_data = std::make_unique<std::string>();
+  chunk_data->reserve(amount_to_read);
+  snapshot_file.read(chunk_data->data(), static_cast<long long>(amount_to_read));
+  request.set_allocated_chunk(chunk_data.release());
 }
 
 RaftClient::RaftClient(RaftConnection connection) : connection_(std::move(connection)) {}

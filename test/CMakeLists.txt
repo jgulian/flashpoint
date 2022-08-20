@@ -5,8 +5,4 @@ target_sources(
         PRIVATE
 
         main.cpp
-
-        raft/in_memory.cpp
-        raft/leader_election.cpp
-        raft/raft_tester.cpp
 )

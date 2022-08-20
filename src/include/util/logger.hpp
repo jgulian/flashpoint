@@ -2,11 +2,8 @@
 #define FLASHPOINT_SRC_INCLUDE_UTIL_LOGGER_HPP_
 
 #include <iostream>
+#include <memory>
 #include <string>
-
-#include "containers/channel.hpp"
-
-#include "util/thread_pool.hpp"
 
 namespace flashpoint::util {
 
@@ -72,7 +69,6 @@ class SimpleLogger : public Logger {
   void worker();
 
  private:
-  containers::QueueChannel<std::string> message_channel_ = {};
   bool supports_colored_text_ = true;
 };
 
