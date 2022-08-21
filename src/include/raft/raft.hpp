@@ -96,7 +96,7 @@ class Raft : private protos::raft::Raft::CallbackService {
   };
 
   struct ExtendedLogEntry {
-    StartResponseReactor response_reactor = {};
+    std::shared_ptr<StartResponseReactor> response_reactor = {};
     protos::raft::LogEntry base = {};
   };
 
@@ -161,10 +161,6 @@ class Raft : private protos::raft::Raft::CallbackService {
   bool checkAllConfigsAgreement(const std::list<PeerId> &agreers);
 
   std::list<PeerId> agreersForIndex(LogIndex index);
-
-  RaftPeer &raftPeerWithId(const std::string &id);
-
-  void updateSnapshot(protos::raft::Snapshot &&snapshot);
 
   void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
 

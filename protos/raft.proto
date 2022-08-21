@@ -70,7 +70,7 @@ message AppendEntriesResponse {
   bool success = 3;
 
   uint64 conflict_index = 4;
-  uint32 conflict_term = 5;
+  sint64 conflict_term = 5;
 }
 
 message RequestVoteRequest {
@@ -104,9 +104,11 @@ message InstallSnapshotResponse {
 message Snapshot {
   uint32 snapshot_id = 1;
   uint64 last_included_index = 2;
-  string file = 3;
-  uint64 file_size = 4;
-  uint32 chunk_count = 5;
+  uint32 last_included_term = 3;
+
+  string file = 4;
+  uint64 file_size = 5;
+  uint32 chunk_count = 6;
 }
 
 message RaftState {
