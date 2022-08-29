@@ -40,6 +40,8 @@ constexpr auto MaxSleepTime = 500ms;
 
 const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;
 
+constexpr auto StartRequestTimeout = 500ms;
+
 struct RaftConfig {
   protos::raft::Peer me;
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
@@ -79,27 +81,8 @@ struct RaftPeer {
   const PeerId &peerId() const;
 };
 
-class Raft : private protos::raft::Raft::CallbackService {
+class Raft : public protos::raft::Raft::Service {
  private:
-  class StartResponseReactor : public grpc::ServerWriteReactor<protos::raft::StartResponse> {
-   private:
-    std::unique_ptr<protos::raft::StartResponse> response_ = nullptr;
-    std::atomic<bool> complete_ = false;
-
-   public:
-    ~StartResponseReactor();
-    void complete(std::unique_ptr<protos::raft::StartResponse> response);
-
-   private:
-    void OnWriteDone(bool b) override;
-    void OnDone() override;
-  };
-
-  struct ExtendedLogEntry {
-    std::shared_ptr<StartResponseReactor> response_reactor = {};
-    protos::raft::LogEntry base = {};
-  };
-
   enum RaftRole {
     LEADER,
     FOLLOWER,
@@ -114,7 +97,7 @@ class Raft : private protos::raft::Raft::CallbackService {
   // Persistant
   std::list<std::unique_ptr<RaftPeer>> peers_;
   //TODO: move to unique pointer of protos::raft::RaftState
-  std::vector<ExtendedLogEntry> log_ = {};
+  std::vector<protos::raft::LogEntry> log_ = {};
   protos::raft::Config base_config_ = {};
   std::list<LogIndex> proposed_configs_ = {};
   LogIndex log_offset_ = 0, log_size_ = 0;
@@ -154,7 +137,7 @@ class Raft : private protos::raft::Raft::CallbackService {
 
   void updateFollower(const std::unique_ptr<RaftPeer> &peer);
 
-  const ExtendedLogEntry &atLogIndex(LogIndex index);
+  const protos::raft::LogEntry &atLogIndex(LogIndex index);
 
   void commitEntries();
 
@@ -164,35 +147,37 @@ class Raft : private protos::raft::Raft::CallbackService {
 
   void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
 
-  grpc::ServerWriteReactor<protos::raft::StartResponse> *Start(::grpc::CallbackServerContext *context,
-                                                               const ::protos::raft::StartRequest *request) override;
-  grpc::ServerUnaryReactor *AppendEntries(::grpc::CallbackServerContext *context,
-                                          const ::protos::raft::AppendEntriesRequest *request,
-                                          ::protos::raft::AppendEntriesResponse *response) override;
-  grpc::ServerUnaryReactor *RequestVote(::grpc::CallbackServerContext *context,
-                                        const ::protos::raft::RequestVoteRequest *request,
-                                        ::protos::raft::RequestVoteResponse *response) override;
-  grpc::ServerUnaryReactor *InstallSnapshot(::grpc::CallbackServerContext *context,
-                                            const ::protos::raft::InstallSnapshotRequest *request,
-                                            ::protos::raft::InstallSnapshotResponse *response) override;
+  grpc::Status Start(::grpc::ServerContext *context, const ::protos::raft::StartRequest *request,
+                     ::protos::raft::StartResponse *response) override;
+  grpc::Status AppendEntries(::grpc::ServerContext *context, const ::protos::raft::AppendEntriesRequest *request,
+                             ::protos::raft::AppendEntriesResponse *response) override;
+  grpc::Status RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request,
+                           ::protos::raft::RequestVoteResponse *response) override;
+  grpc::Status InstallSnapshot(::grpc::ServerContext *context, const ::protos::raft::InstallSnapshotRequest *request,
+                               ::protos::raft::InstallSnapshotResponse *response) override;
 };
 
 class RaftClient {
  private:
-  std::map<std::string, std::string> config_;
-  std::optional<RaftConnection> cached_connection_;
-  std::unique_ptr<std::shared_mutex> lock_;
-
-  bool doRequest(const protos::raft::StartRequest &request);
+  protos::raft::Config config_ = {};
+  std::optional<std::pair<std::string, RaftConnection>> cached_connection_info_ = std::nullopt;
+  std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
 
  public:
-  explicit RaftClient(const std::map<std::string, std::string> &config);
+  explicit RaftClient(const protos::raft::Config &config);
 
-  void updateConfig(const std::map<std::string, std::string> &config);
+  void updateConfig(const protos::raft::Config &config);
 
   LogIndex start(const std::string &command);
 
   LogIndex startConfig(const protos::raft::Config &config);
+
+ private:
+  LogIndex doRequest(const protos::raft::StartRequest &request);
+
+  void checkForCacheExistence(std::shared_lock<std::shared_mutex> &lock);
+
+  void updateCache(std::shared_lock<std::shared_mutex> &lock, const std::string &leader_id);
 };
 
 }// namespace flashpoint::raft

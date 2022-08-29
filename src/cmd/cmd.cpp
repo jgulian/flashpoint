@@ -106,16 +106,10 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
   keyvalue::KeyValueService service = {command_args.host_address, command_args.config_file};
-  auto api = KeyValueAPI(service);
-
-  grpc::ServerBuilder grpc_server_builder;
-  grpc_server_builder.AddListeningPort(command_args.host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder.RegisterService(&api);
-  std::unique_ptr<grpc::Server> grpc_api_server(grpc_server_builder.BuildAndStart());
-
-  std::cout << "Started api on " << command_args.host_address << " and peer server on "
-            << command_args.peer_server_address << std::endl;
-  grpc_api_server->Wait();
+  service.run();
+  std::cout << "starting server" << std::endl;
+  while (service.update())
+    ;
 }
 
 }// namespace flashpoint::cmd

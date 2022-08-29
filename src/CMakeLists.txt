@@ -4,7 +4,6 @@ target_sources(
         PRIVATE
 
         cmd/cmd.cpp
-        cmd/server.cpp
 
         keyvalue/keyvalue.cpp
 

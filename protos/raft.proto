@@ -3,7 +3,7 @@ syntax = "proto3";
 package protos.raft;
 
 service Raft {
-  rpc Start (StartRequest) returns (stream StartResponse) {}
+  rpc Start (StartRequest) returns (StartResponse) {}
 
   rpc AppendEntries (AppendEntriesRequest) returns (AppendEntriesResponse) {}
   rpc RequestVote (RequestVoteRequest) returns (RequestVoteResponse) {}
@@ -30,25 +30,27 @@ enum LogDataType {
   CONFIG = 1;
 }
 
-message LogEntry {
-  uint64 index = 1;
-  uint32 term = 2;
-
-  bytes data = 4;
-  LogDataType type = 5;
-
-  bool command_valid = 6;
-}
-
-message StartRequest {
+message LogData {
   bytes data = 1;
   LogDataType type = 2;
 }
 
+message LogEntry {
+  uint64 index = 1;
+  uint32 term = 2;
+
+  LogData log_data = 3;
+  bool data_valid = 4;
+}
+
+message StartRequest {
+  LogData log_data = 1;
+}
+
 message StartResponse {
   oneof data {
-    Peer leader = 1;
-    bool successful = 2;
+    string leader_id = 1;
+    uint64 log_index = 2;
   }
 }
 

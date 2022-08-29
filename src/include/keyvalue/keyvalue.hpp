@@ -1,7 +1,10 @@
 #ifndef FLASHPOINT_KEYVALUE_HPP
 #define FLASHPOINT_KEYVALUE_HPP
 
-#include "yaml-cpp/yaml.h"
+#include <grpcpp/security/server_credentials.h>
+#include <grpcpp/server_builder.h>
+#include <yaml-cpp/yaml.h>
+
 #include <protos/kv.grpc.pb.h>
 
 #include <functional>
@@ -29,11 +32,10 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
   friend KeyValueService;
 
   KeyValueService &service_;
-
-  explicit KeyValueServer(KeyValueService &service);
-
  public:
+  explicit KeyValueServer(KeyValueService &service);
   ~KeyValueServer() override;
+
   grpc::Status Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                    ::protos::kv::Operation *response) override;
   grpc::Status Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
@@ -45,14 +47,25 @@ class KeyValueService {
 
  private:
   std::unordered_map<std::string, std::string> data_;
-  raft::RaftClient client_;
-  RaftConfig raft_config_ = {};
-  std::unique_ptr<std::thread> service_updater_;
-  std::unique_ptr<std::shared_mutex> lock_;
   std::map<raft::LogIndex, OperationResult> ongoing_transactions_;
+
+  std::unique_ptr<raft::Raft> raft_server_;
+  std::unique_ptr<raft::RaftClient> raft_client_;
+  RaftConfig raft_config_ = {};
+
+  std::unique_ptr<KeyValueServer> key_value_server_;
+
+  grpc::ServerBuilder grpc_server_builder_;
+  std::unique_ptr<grpc::Server> grpc_server_;
+
+  std::unique_ptr<std::shared_mutex> lock_;
 
  public:
   KeyValueService(const std::string &address, const std::string &config_file);
+
+  void run();
+  bool update();
+  void kill();
 
   OperationResult start(Operation &operation);
   void finish(const protos::raft::LogEntry &entry);

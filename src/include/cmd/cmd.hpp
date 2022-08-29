@@ -9,8 +9,6 @@
 
 #include "keyvalue/keyvalue.hpp"
 
-#include "cmd/server.hpp"
-
 namespace flashpoint::cmd {
 
 struct DataOrFileArgs {

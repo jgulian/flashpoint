@@ -4,20 +4,26 @@ namespace flashpoint::keyvalue {
 
 
 KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
+KeyValueServer::~KeyValueServer() { throw std::runtime_error("not completed"); }
+
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                                  ::protos::kv::Operation *response) {
-  response->CopyFrom(service_.get(request->key()));
+  auto operation_future = service_.get(request->key())->get_future();
+  operation_future.wait();
+  response->CopyFrom(operation_future.get());
   return grpc::Status::OK;
 }
 grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
                                  ::protos::kv::Operation *response) {
-  response->CopyFrom(service_.put(request->key(), request->value()));
+  auto operation_future = service_.put(request->key(), request->value())->get_future();
+  operation_future.wait();
+  response->CopyFrom(operation_future.get());
   return grpc::Status::OK;
 }
 
-KeyValueService::KeyValueService(const std::string &address, const std::string &config_file) : client_(nullptr) {
+KeyValueService::KeyValueService(const std::string &address, const std::string &config_file) {
   auto config = YAML::LoadFile(config_file);
-  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"])
+  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"] || !config["raft_address"])
     throw std::runtime_error("config file not formatted correctly.");
 
   protos::raft::Config starting_config = {};
@@ -39,35 +45,45 @@ KeyValueService::KeyValueService(const std::string &address, const std::string &
 
   if (me.id() != config["me"].as<std::string>()) throw std::runtime_error("me must be an id used in the config");
 
-  auto raft_config = raft::RaftConfig();
-  raft_config.me = me;
-  raft_config.starting_config = starting_config;
-  raft_config.apply_command = [this](auto &&entry) { finish(std::forward<decltype(entry)>(entry)); };
+  auto raft_config = std::make_unique<raft::RaftConfig>();
+  raft_config->me = me;
+  raft_config->starting_config = starting_config;
+  raft_config->apply_command = [this](auto &&entry) { finish(std::forward<decltype(entry)>(entry)); };
+  raft_config->apply_config_update = [this](auto &&entry) {
+    auto config = protos::raft::Config();
+    config.ParseFromString(entry.log_data().data());
+    raft_client_->updateConfig(std::forward<protos::raft::Config>(config));
+  };
 
-  auto raft = raft::Raft();
-}
-KeyValueService::OperationResult KeyValueService::put(const std::string &key, const std::string &value) {
-  auto op = Operation();
-  op.mutable_put()->mutable_args()->set_key(key);
-  op.mutable_put()->mutable_args()->set_value(value);
-  return start(op);
+  raft_server_ = std::make_unique<raft::Raft>(std::move(raft_config));
+  raft_client_ = std::make_unique<raft::RaftClient>(starting_config);
+  key_value_server_ = std::make_unique<KeyValueServer>(*this);
+
+  auto raft_host_address = config["raft_address"].as<std::string>();
+
+  grpc_server_builder_.AddListeningPort(address, grpc::InsecureServerCredentials());
+  grpc_server_builder_.AddListeningPort(raft_host_address, grpc::InsecureServerCredentials());
+  grpc_server_builder_.RegisterService(address, key_value_server_.get());
+  grpc_server_builder_.RegisterService(raft_host_address, raft_server_.get());
 }
 
-KeyValueService::OperationResult KeyValueService::get(const std::string &key) {
-  auto op = Operation();
-  op.mutable_get()->mutable_args()->set_key(key);
-  return start(op);
+void KeyValueService::run() {
+  grpc_server_ = grpc_server_builder_.BuildAndStart();
+  while (!raft_server_->run())
+    ;
 }
+bool KeyValueService::update() { return true; }
+void KeyValueService::kill() {}
 
 KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
-  auto log_index = client_.start(operation.SerializeAsString());
+  auto log_index = raft_client_->start(operation.SerializeAsString());
   auto operation_result = std::make_shared<std::promise<Operation>>();
   ongoing_transactions_[log_index] = operation_result;
   return operation_result;
 }
 void KeyValueService::finish(const protos::raft::LogEntry &entry) {
   Operation operation = {};
-  operation.ParseFromString(entry.data());
+  operation.ParseFromString(entry.log_data().data());
 
   switch (operation.data_case()) {
     case Operation::kGet: {
@@ -106,5 +122,16 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
   }
 }
 
-KeyValueServer::~KeyValueServer() { throw std::runtime_error("not completed"); }
+KeyValueService::OperationResult KeyValueService::put(const std::string &key, const std::string &value) {
+  auto op = Operation();
+  op.mutable_put()->mutable_args()->set_key(key);
+  op.mutable_put()->mutable_args()->set_value(value);
+  return start(op);
+}
+
+KeyValueService::OperationResult KeyValueService::get(const std::string &key) {
+  auto op = Operation();
+  op.mutable_get()->mutable_args()->set_key(key);
+  return start(op);
+}
 }// namespace flashpoint::keyvalue
