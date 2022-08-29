@@ -42,28 +42,13 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
         log_message = "[WARN] " + message + "\n";
         break;
       case LogLevel::INFO:
-        log_message = "[INFO] " + message + "\n";
-        break;
-      case LogLevel::DEBUG:
-        log_message = "[DEBUG] + " + message + "\n";
-        break;
+        log_message = "[INFO] " + message + "\n"; break;
+      case LogLevel::DEBUG: log_message = "[DEBUG] + " + message + "\n"; break;
       case LogLevel::ALL: break;
     }
   }
 }
 
-void SimpleLogger::worker() {
-  for (int i = 0; i < 10; i++) {
-    try {
-      auto message = message_channel_.tryRead();
-      if (!message.has_value())
-        break;
-      std::cout << message.value();
-    } catch (const std::runtime_error &e) {
-      std::cout << "Logger closing after error: " << e.what() << std::endl;
-      return;
-    }
-  }
-  THREAD_POOL->newTask([this]() { this->worker(); });
-}
+void SimpleLogger::worker() {}
+SimpleLogger::SimpleLogger(const LogLevel &log_level) : Logger(log_level) {}
 }// namespace flashpoint::util

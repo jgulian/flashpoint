@@ -7,8 +7,6 @@ target_sources(
         cmd/server.cpp
 
         keyvalue/keyvalue.cpp
-        keyvalue/plugins/raft.cpp
-        keyvalue/storage/simple_storage.cpp
 
         raft/errors.cpp
         raft/raft.cpp

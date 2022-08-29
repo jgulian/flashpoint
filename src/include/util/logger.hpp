@@ -62,7 +62,7 @@ class SimpleLogger : public Logger {
  public:
   explicit SimpleLogger(const LogLevel &log_level = LogLevel::INFO);
 
-  ~SimpleLogger() override;
+  ~SimpleLogger() override = default;
 
   void msg(LogLevel log_level, const std::string &message) override;
 

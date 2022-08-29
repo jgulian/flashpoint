@@ -26,7 +26,7 @@ class MTRandom : public Random {
  public:
   MTRandom() : generator_(std::random_device()()) {}
 
-  explicit MTRandom(const std::seed_seq &seed) : generator_(seed) {}
+  explicit MTRandom(std::seed_seq &seed) : generator_(seed) {}
 
   float random() override { return std::uniform_real_distribution<float>(0, 1)(generator_); }
 
@@ -38,7 +38,10 @@ class MTRandom : public Random {
     return std::seed_seq(seed.begin(), seed.end());
   }
 
-  std::shared_ptr<Random> seedRandom() override { return std::make_shared<MTRandom>(generateSeed()); }
+  std::shared_ptr<Random> seedRandom() override {
+    auto seed = generateSeed();
+    return std::make_shared<MTRandom>(seed);
+  }
 };
 
 }// namespace flashpoint::util

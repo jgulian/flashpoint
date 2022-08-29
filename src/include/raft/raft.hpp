@@ -4,7 +4,9 @@
 #include <grpcpp/create_channel.h>
 
 #include <protos/raft.grpc.pb.h>
+#include <protos/raft.pb.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -49,13 +51,6 @@ struct RaftConfig {
 };
 
 struct RaftPeer {
-  template<class... Ts>
-  struct overloaded : Ts... {
-    using Ts::operator()...;
-  };
-  template<class... Ts>
-  overloaded(Ts...) -> overloaded<Ts...>;
-
   template<class Request, class Response>
   struct Call {
     grpc::ClientContext client_context = {};
@@ -87,10 +82,15 @@ struct RaftPeer {
 class Raft : private protos::raft::Raft::CallbackService {
  private:
   class StartResponseReactor : public grpc::ServerWriteReactor<protos::raft::StartResponse> {
-   public:
-    StartResponseReactor();
+   private:
+    std::unique_ptr<protos::raft::StartResponse> response_ = nullptr;
+    std::atomic<bool> complete_ = false;
 
-    void complete(protos::raft::StartResponse response);
+   public:
+    ~StartResponseReactor();
+    void complete(std::unique_ptr<protos::raft::StartResponse> response);
+
+   private:
     void OnWriteDone(bool b) override;
     void OnDone() override;
   };
@@ -184,7 +184,7 @@ class RaftClient {
   bool doRequest(const protos::raft::StartRequest &request);
 
  public:
-  explicit RaftClient(RaftConnection connection);
+  RaftClient(RaftConnection connection);
 
   void start(const std::string &command);
 

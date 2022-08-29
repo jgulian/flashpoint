@@ -14,5 +14,6 @@ const char *RaftException::what() const _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_NOTHROW {
     case ProcessNotRunning: return "";
     case IndexEarlierThanSnapshot: return "";
     case IndexOutOfLogBounds: return "";
+    default: return "";
   }
 }

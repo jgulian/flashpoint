@@ -45,25 +45,10 @@ CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args) {
   CLI::App *start = app.add_subcommand("start");
 
   start->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
-  start->add_option("-s,--snapshot", command_args.server_config.snapshot_file, "file to use to store snapshots");
-
-  start->add_option("-r,--raft", command_args.server_config.peer_server_address, "address for raft to use")
-      ->transform([&command_args](std::string data) {command_args.server_config.use_raft = true; return std::move(data); });
+  start->add_option("-r,--raft", command_args.peer_server_address, "address for raft to use");
+  start->add_option("-s,--snapshot", command_args.snapshot_file, "file to use to store snapshots");
 
   return start;
-}
-CLI::App *setupConnectSubcommand(CLI::App &app, ConnectCommandArgs &command_args) {
-  CLI::App *connect = app.add_subcommand("connect");
-
-  connect->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
-  connect->add_option("-p,--peer", command_args.peer_address, "peer address")->required();
-
-  connect->add_option("-r,--raft", command_args.server_config.peer_server_address, "address for raft to use")
-      ->transform([&command_args](std::string data) {command_args.server_config.use_raft = true; return std::move(data); });
-
-  connect->add_option("-s,--snapshot", command_args.server_config.snapshot_file, "file to use to store snapshots");
-
-  return connect;
 }
 
 void getCmd(CLI::App &get, const GetCommandArgs &command_args) {
@@ -120,45 +105,16 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   }
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
-  keyvalue::KeyValueStorageBuilder builder = {};
-  builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
-
-  if (command_args.server_config.use_raft) {
-    std::cout << "Starting raft at " << command_args.server_config.peer_server_address << " ..." << std::endl;
-    auto raft_plugin = std::make_shared<keyvalue::plugins::RaftKVPlugin>(command_args.server_config.peer_server_address);
-    builder.addPlugin(std::move(raft_plugin));
-  }
-
-  auto kv_service = builder.build();
-  KeyValueAPI api_service = KeyValueAPI(*kv_service);
+  keyvalue::KeyValueService service = {command_args.host_address, command_args.peer_server_address};
+  auto api = KeyValueAPI(service);
 
   grpc::ServerBuilder grpc_server_builder;
   grpc_server_builder.AddListeningPort(command_args.host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder.RegisterService(&api_service);
+  grpc_server_builder.RegisterService(&api);
   std::unique_ptr<grpc::Server> grpc_api_server(grpc_server_builder.BuildAndStart());
 
-  std::cout << "Started api on " << command_args.host_address << std::endl;
-  grpc_api_server->Wait();
-}
-void connectCmd(CLI::App &connect, const ConnectCommandArgs &command_args) {
-  keyvalue::KeyValueStorageBuilder builder = {};
-  builder.addStorage(std::make_shared<keyvalue::SimpleStorage>());
-  if (command_args.server_config.use_raft) {
-    std::cout << "Starting raft at " << command_args.server_config.peer_server_address << " ..." << std::endl;
-    auto raft_plugin = std::make_shared<keyvalue::plugins::RaftKVPlugin>(command_args.server_config.peer_server_address, command_args.peer_address);
-    builder.addPlugin(std::move(raft_plugin));
-  }
-
-
-  auto kv_service = builder.build();
-  KeyValueAPI api_service = KeyValueAPI(*kv_service);
-
-  grpc::ServerBuilder grpc_server_builder;
-  grpc_server_builder.AddListeningPort(command_args.host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder.RegisterService(&api_service);
-  std::unique_ptr<grpc::Server> grpc_api_server(grpc_server_builder.BuildAndStart());
-
-  std::cout << "Started api on " << command_args.host_address << std::endl;
+  std::cout << "Started api on " << command_args.host_address << " and peer server on "
+            << command_args.peer_server_address << std::endl;
   grpc_api_server->Wait();
 }
 

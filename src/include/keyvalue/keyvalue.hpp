@@ -1,7 +1,7 @@
 #ifndef FLASHPOINT_KEYVALUE_HPP
 #define FLASHPOINT_KEYVALUE_HPP
 
-#include <protos/kv.pb.h>
+#include <protos/kv.grpc.pb.h>
 
 #include <functional>
 #include <list>
@@ -9,67 +9,45 @@
 #include <optional>
 #include <unordered_map>
 
+#include "raft/raft.hpp"
+
+
 namespace flashpoint::keyvalue {
 using Operation = protos::kv::Operation;
 using Status = protos::kv::Status;
 
-class KeyValueStorageBuilder;
+class KeyValueService;
 
-class Plugin {
-  friend KeyValueStorageBuilder;
+class KeyValueServer final : public protos::kv::KeyValueApi::Service {
+ private:
+  friend KeyValueService;
+
+  KeyValueService &service_;
+
+  explicit KeyValueServer(KeyValueService &service);
 
  public:
-  Plugin() = default;
-  Plugin(const Plugin &plugin) = delete;
-
-  virtual bool forward(Operation &operation) = 0;
-
- protected:
-  void start(Operation &operation);
-
- private:
-  void addStart(std::function<void(Operation &operation)> start);
-
-  std::function<void(Operation &operation)> start_fn_;
+  ~KeyValueServer() override;
+  grpc::Status Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
+                   ::protos::kv::Operation *response) override;
+  grpc::Status Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
+                   ::protos::kv::Operation *response) override;
 };
 
-    class Storage {
-    public:
-     Storage() = default;
-     Storage(const Storage &storage) = delete;
+class KeyValueService {
+ public:
+  KeyValueService(const std::string &address, const std::string &raft_address);
 
-     virtual bool doOperation(Operation &operation) = 0;
-    };
+  void start(Operation &operation);
 
-    class KeyValueService {
-      friend KeyValueStorageBuilder;
+  Operation put(const std::string &key, const std::string &value);
+  Operation get(const std::string &key);
 
-     public:
-      explicit KeyValueService(std::shared_ptr<Storage> storage) : storage_(std::move(storage)) {}
+ private:
+  std::unordered_map<std::string, std::string> data_;
+  raft::RaftClient client_;
+};
 
-      void start(Operation &operation);
+}// namespace flashpoint::keyvalue
 
-      Operation put(const std::string &key, const std::string &value);
-      Operation get(const std::string &key);
-
-     private:
-      void setPlugins(std::list<std::shared_ptr<Plugin>> plugins);
-
-      std::shared_ptr<Storage> storage_;
-      std::list<std::shared_ptr<Plugin>> plugins_;
-    };
-
-    class KeyValueStorageBuilder {
-     public:
-      KeyValueStorageBuilder *addStorage(std::shared_ptr<Storage> storage);
-      KeyValueStorageBuilder *addPlugin(std::shared_ptr<Plugin> plugin);
-
-      std::shared_ptr<KeyValueService> build();
-
-     private:
-      std::list<std::shared_ptr<Plugin>> plugins_;
-      std::optional<std::shared_ptr<Storage>> storage_;
-    };
-}
-
-#endif //FLASHPOINT_KEYVALUE_HPP
+#endif//FLASHPOINT_KEYVALUE_HPP
