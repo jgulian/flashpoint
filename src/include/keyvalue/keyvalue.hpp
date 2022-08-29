@@ -41,19 +41,24 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
 };
 
 class KeyValueService {
- public:
-  KeyValueService(const std::string &address, const std::string &raft_address, const std::string &config_file);
-
-  void start(Operation &operation);
-
-  Operation put(const std::string &key, const std::string &value);
-  Operation get(const std::string &key);
+  using OperationResult = std::shared_ptr<std::promise<Operation>>;
 
  private:
   std::unordered_map<std::string, std::string> data_;
   raft::RaftClient client_;
   RaftConfig raft_config_ = {};
   std::unique_ptr<std::thread> service_updater_;
+  std::unique_ptr<std::shared_mutex> lock_;
+  std::map<raft::LogIndex, OperationResult> ongoing_transactions_;
+
+ public:
+  KeyValueService(const std::string &address, const std::string &config_file);
+
+  OperationResult start(Operation &operation);
+  void finish(const protos::raft::LogEntry &entry);
+
+  OperationResult put(const std::string &key, const std::string &value);
+  OperationResult get(const std::string &key);
 };
 
 }// namespace flashpoint::keyvalue

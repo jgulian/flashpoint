@@ -45,7 +45,7 @@ CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args) {
   CLI::App *start = app.add_subcommand("start");
 
   start->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
-  start->add_option("-r,--raft", command_args.peer_server_address, "address for raft to use");
+  start->add_option("-r,--raft", command_args.config_file, "config file for raft")->required();
   start->add_option("-s,--snapshot", command_args.snapshot_file, "file to use to store snapshots");
 
   return start;
@@ -105,7 +105,7 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   }
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
-  keyvalue::KeyValueService service = {command_args.host_address, command_args.peer_server_address};
+  keyvalue::KeyValueService service = {command_args.host_address, command_args.config_file};
   auto api = KeyValueAPI(service);
 
   grpc::ServerBuilder grpc_server_builder;

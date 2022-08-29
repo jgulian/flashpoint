@@ -15,39 +15,95 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
   return grpc::Status::OK;
 }
 
-KeyValueService::KeyValueService(const std::string &address, const std::string &raft_address,
-                                 const std::string &config_file)
-    : client_(nullptr) {
+KeyValueService::KeyValueService(const std::string &address, const std::string &config_file) : client_(nullptr) {
   auto config = YAML::LoadFile(config_file);
-  if (!config["raft_config"] || !config["raft_config"].IsMap())
+  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"])
     throw std::runtime_error("config file not formatted correctly.");
 
-  std::map<std::string, std::string> config_data = {};
+  protos::raft::Config starting_config = {};
+  protos::raft::Peer me = {};
   auto peers = config["raft_config"];
-  for (YAML::const_iterator it = peers.begin(); it != peers.end(); ++it)
-    config_data[it->first.as<std::string>()] = it->second.as<std::string>();
+  for (YAML::const_iterator it = peers.begin(); it != peers.end(); ++it) {
+    auto id = it->first.as<std::string>();
+    for (auto &peer : starting_config.peers())
+      if (peer.id() == id) throw std::runtime_error("peers must have different ids");
+
+    auto peer = starting_config.mutable_peers()->Add();
+    peer->set_id(id);
+    peer->set_voting(true);
+    peer->mutable_data()->set_address(it->second.as<std::string>());
+    // TODO: Update for other connection options.
+
+    if (id == config["me"].as<std::string>()) me.CopyFrom(*peer);
+  }
+
+  if (me.id() != config["me"].as<std::string>()) throw std::runtime_error("me must be an id used in the config");
+
+  auto raft_config = raft::RaftConfig();
+  raft_config.me = me;
+  raft_config.starting_config = starting_config;
+  raft_config.apply_command = [this](auto &&entry) { finish(std::forward<decltype(entry)>(entry)); };
+
+  auto raft = raft::Raft();
 }
-Operation KeyValueService::put(const std::string &key, const std::string &value) {
+KeyValueService::OperationResult KeyValueService::put(const std::string &key, const std::string &value) {
   auto op = Operation();
   op.mutable_put()->mutable_args()->set_key(key);
   op.mutable_put()->mutable_args()->set_value(value);
-
-  start(op);
-  return std::move(op);
+  return start(op);
 }
 
-Operation KeyValueService::get(const std::string &key) {
+KeyValueService::OperationResult KeyValueService::get(const std::string &key) {
   auto op = Operation();
   op.mutable_get()->mutable_args()->set_key(key);
-
-  start(op);
-  if (op.status().code() == protos::kv::Code::Ok) op.get().reply().value();
-  return std::move(op);
+  return start(op);
 }
 
-void KeyValueService::start(Operation &operation) {
-  operation.mutable_status()->set_code(protos::kv::Code::Ok);
-  throw std::runtime_error("not completed");
+KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
+  auto log_index = client_.start(operation.SerializeAsString());
+  auto operation_result = std::make_shared<std::promise<Operation>>();
+  ongoing_transactions_[log_index] = operation_result;
+  return operation_result;
+}
+void KeyValueService::finish(const protos::raft::LogEntry &entry) {
+  Operation operation = {};
+  operation.ParseFromString(entry.data());
+
+  switch (operation.data_case()) {
+    case Operation::kGet: {
+      auto &key = operation.put().args().key();
+      if (key.empty() || !data_.contains(key)) {
+        operation.mutable_status()->set_code(protos::kv::KeyNotFound);
+        operation.mutable_status()->set_info(key + " not found");
+        break;
+      }
+      operation.mutable_get()->mutable_reply()->set_value(data_.at(key));
+      operation.mutable_status()->set_code(protos::kv::Ok);
+      break;
+    }
+    case Operation::kPut:
+      if (operation.put().args().key().empty()) {
+        operation.mutable_status()->set_code(protos::kv::InvalidOperation);
+        operation.mutable_status()->set_info("key is empty");
+        break;
+      }
+      data_[operation.put().args().key()] = operation.put().args().value();
+      operation.mutable_status()->set_code(protos::kv::Ok);
+      break;
+    case Operation::DATA_NOT_SET:
+      operation.mutable_status()->set_code(protos::kv::InvalidOperation);
+      operation.mutable_status()->set_info("operation data not set");
+      break;
+  }
+
+  {
+    std::unique_lock lock(*lock_);
+    if (ongoing_transactions_.contains(entry.index())) {
+      auto operation_result = ongoing_transactions_[entry.index()];
+      operation_result->set_value(operation);
+      ongoing_transactions_.erase(entry.index());
+    }
+  }
 }
 
 KeyValueServer::~KeyValueServer() { throw std::runtime_error("not completed"); }

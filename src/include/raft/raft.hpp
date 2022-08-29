@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <utility>
 #include <variant>
 
@@ -44,10 +45,9 @@ struct RaftConfig {
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
   std::function<void(protos::raft::LogEntry log_entry)> apply_config_update = [](const protos::raft::LogEntry &) {};
   std::optional<protos::raft::Config> starting_config = std::nullopt;
-  std::shared_ptr<util::Random> random_ = std::make_shared<util::MTRandom>();
-  std::string snapshot_file;
   std::function<void(std::string)> save_state = [](const std::string &) {};
-  std::unique_ptr<grpc::CompletionQueue> completion_queue_;
+  std::string snapshot_file;
+  std::shared_ptr<util::Random> random_ = std::make_shared<util::MTRandom>();
 };
 
 struct RaftPeer {
@@ -179,16 +179,20 @@ class Raft : private protos::raft::Raft::CallbackService {
 
 class RaftClient {
  private:
-  RaftConnection connection_;
+  std::map<std::string, std::string> config_;
+  std::optional<RaftConnection> cached_connection_;
+  std::unique_ptr<std::shared_mutex> lock_;
 
   bool doRequest(const protos::raft::StartRequest &request);
 
  public:
-  RaftClient(RaftConnection connection);
+  explicit RaftClient(const std::map<std::string, std::string> &config);
 
-  void start(const std::string &command);
+  void updateConfig(const std::map<std::string, std::string> &config);
 
-  bool startConfig(const protos::raft::Config &config);
+  LogIndex start(const std::string &command);
+
+  LogIndex startConfig(const protos::raft::Config &config);
 };
 
 }// namespace flashpoint::raft

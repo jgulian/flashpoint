@@ -32,7 +32,7 @@ struct PutCommandArgs {
 
 struct StartCommandArgs {
   std::string host_address = "localhost:3308";
-  std::string peer_server_address = "0.0.0.0:3309";
+  std::string config_file = "";
   std::string snapshot_file;
 };
 

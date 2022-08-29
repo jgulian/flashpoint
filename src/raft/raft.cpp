@@ -389,20 +389,22 @@ void Raft::fillWithChunk(protos::raft::InstallSnapshotRequest &request) {
   request.set_allocated_chunk(chunk_data.release());
 }
 
-RaftClient::RaftClient(RaftConnection connection) : connection_(std::move(connection)) {}
+RaftClient::RaftClient(const std::map<std::string, std::string> &config) {}
+void RaftClient::updateConfig(const std::map<std::string, std::string> &config) {}
+
 bool RaftClient::doRequest(const protos::raft::StartRequest &request) {
   grpc::ClientContext client_context;
   std::unique_ptr<grpc::ClientReaderInterface<::protos::raft::StartResponse>> response =
       connection_->Start(&client_context, request);
   return false;
 }
-void RaftClient::start(const std::string &command) {
+LogIndex RaftClient::start(const std::string &command) {
   protos::raft::StartRequest request = {};
   request.set_data(command);
   request.set_type(protos::raft::COMMAND);
   doRequest(request);
 }
-bool RaftClient::startConfig(const protos::raft::Config &config) {
+LogIndex RaftClient::startConfig(const protos::raft::Config &config) {
   protos::raft::StartRequest request = {};
   request.set_data(config.SerializeAsString());
   request.set_type(protos::raft::CONFIG);
