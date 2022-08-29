@@ -15,7 +15,18 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
   return grpc::Status::OK;
 }
 
-KeyValueService::KeyValueService(const std::string &address, const std::string &raft_address) : client_(nullptr) {}
+KeyValueService::KeyValueService(const std::string &address, const std::string &raft_address,
+                                 const std::string &config_file)
+    : client_(nullptr) {
+  auto config = YAML::LoadFile(config_file);
+  if (!config["raft_config"] || !config["raft_config"].IsMap())
+    throw std::runtime_error("config file not formatted correctly.");
+
+  std::map<std::string, std::string> config_data = {};
+  auto peers = config["raft_config"];
+  for (YAML::const_iterator it = peers.begin(); it != peers.end(); ++it)
+    config_data[it->first.as<std::string>()] = it->second.as<std::string>();
+}
 Operation KeyValueService::put(const std::string &key, const std::string &value) {
   auto op = Operation();
   op.mutable_put()->mutable_args()->set_key(key);

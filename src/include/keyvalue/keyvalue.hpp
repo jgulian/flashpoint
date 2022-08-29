@@ -1,6 +1,7 @@
 #ifndef FLASHPOINT_KEYVALUE_HPP
 #define FLASHPOINT_KEYVALUE_HPP
 
+#include "yaml-cpp/yaml.h"
 #include <protos/kv.grpc.pb.h>
 
 #include <functional>
@@ -15,6 +16,11 @@
 namespace flashpoint::keyvalue {
 using Operation = protos::kv::Operation;
 using Status = protos::kv::Status;
+
+struct RaftConfig {
+  std::filesystem::file_time_type last_updated;
+  protos::raft::Config config = {};
+};
 
 class KeyValueService;
 
@@ -36,7 +42,7 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
 
 class KeyValueService {
  public:
-  KeyValueService(const std::string &address, const std::string &raft_address);
+  KeyValueService(const std::string &address, const std::string &raft_address, const std::string &config_file);
 
   void start(Operation &operation);
 
@@ -46,6 +52,8 @@ class KeyValueService {
  private:
   std::unordered_map<std::string, std::string> data_;
   raft::RaftClient client_;
+  RaftConfig raft_config_ = {};
+  std::unique_ptr<std::thread> service_updater_;
 };
 
 }// namespace flashpoint::keyvalue
