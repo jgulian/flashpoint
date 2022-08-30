@@ -46,7 +46,7 @@ struct RaftConfig {
   protos::raft::Peer me;
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
   std::function<void(protos::raft::LogEntry log_entry)> apply_config_update = [](const protos::raft::LogEntry &) {};
-  std::optional<protos::raft::Config> starting_config = std::nullopt;
+  protos::raft::Config starting_config = {};
   std::function<void(std::string)> save_state = [](const std::string &) {};
   std::string snapshot_file;
   std::shared_ptr<util::Random> random_ = std::make_shared<util::MTRandom>();
@@ -71,7 +71,8 @@ struct RaftPeer {
   protos::raft::Peer peer = {};
   LogIndex match_index = 0, next_index = 0;
   SnapshotId snapshot_id = 0, chunk_offset = 0;
-  RaftConnection connection;
+  RaftConnection connection = nullptr;
+  bool active_in_base_config = false;
   std::list<LogIndex> active_in_configs = {};
 
   std::variant<std::monostate, AppendEntriesCall, InstallSnapshotCall, RequestVoteCall> last_call = {};
@@ -79,6 +80,7 @@ struct RaftPeer {
  public:
   RaftPeer(protos::raft::Peer peer, RaftConnection connection);
   const PeerId &peerId() const;
+  bool active();
 };
 
 class Raft : public protos::raft::Raft::Service {
@@ -103,7 +105,6 @@ class Raft : public protos::raft::Raft::Service {
   LogIndex log_offset_ = 0, log_size_ = 0;
   LogTerm current_term_ = 0;
   std::optional<PeerId> voted_for_ = std::nullopt;
-  PeerId me_ = {};
   protos::raft::Snapshot snapshot_ = {};
 
   // Volatile
@@ -146,6 +147,10 @@ class Raft : public protos::raft::Raft::Service {
   std::list<PeerId> agreersForIndex(LogIndex index);
 
   void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
+
+  RaftPeer &getPeer(const PeerId &peer_id);
+
+  void registerNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config = false);
 
   grpc::Status Start(::grpc::ServerContext *context, const ::protos::raft::StartRequest *request,
                      ::protos::raft::StartResponse *response) override;

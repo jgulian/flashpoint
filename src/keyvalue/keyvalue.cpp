@@ -4,7 +4,7 @@ namespace flashpoint::keyvalue {
 
 
 KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
-KeyValueServer::~KeyValueServer() { throw std::runtime_error("not completed"); }
+KeyValueServer::~KeyValueServer() {}
 
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                                  ::protos::kv::Operation *response) {
@@ -23,7 +23,7 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
 
 KeyValueService::KeyValueService(const std::string &address, const std::string &config_file) {
   auto config = YAML::LoadFile(config_file);
-  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"] || !config["raft_address"])
+  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"])
     throw std::runtime_error("config file not formatted correctly.");
 
   protos::raft::Config starting_config = {};
@@ -59,8 +59,7 @@ KeyValueService::KeyValueService(const std::string &address, const std::string &
   raft_client_ = std::make_unique<raft::RaftClient>(starting_config);
   key_value_server_ = std::make_unique<KeyValueServer>(*this);
 
-  auto raft_host_address = config["raft_address"].as<std::string>();
-
+  auto &raft_host_address = me.data().address();
   grpc_server_builder_.AddListeningPort(address, grpc::InsecureServerCredentials());
   grpc_server_builder_.AddListeningPort(raft_host_address, grpc::InsecureServerCredentials());
   grpc_server_builder_.RegisterService(address, key_value_server_.get());
@@ -76,6 +75,7 @@ bool KeyValueService::update() { return true; }
 void KeyValueService::kill() {}
 
 KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
+  std::cout << "starting operation " << operation.data_case() << std::endl;
   auto log_index = raft_client_->start(operation.SerializeAsString());
   auto operation_result = std::make_shared<std::promise<Operation>>();
   ongoing_transactions_[log_index] = operation_result;

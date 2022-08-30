@@ -3,24 +3,29 @@
 namespace flashpoint::raft {
 
 bool hasAgreement(const protos::raft::Config &config, const std::list<PeerId> &agreers) {
-  auto agree_count = 0;
-  for (const auto &peer : agreers)
-    for (const auto &config_peer : config.peers())
-      if (config_peer.id() == peer) agree_count++;
-  return agree_count > (config.peers_size() / 2);
-}
+  std::cout << "config " << config.peers_size() << " agreers " << agreers.size() << std::endl;
 
-std::unique_ptr<RaftPeer> connectToPeer(protos::raft::Peer peer_data) {
-  auto channel = grpc::CreateChannel(peer_data.data().address(), grpc::InsecureChannelCredentials());
-  return std::make_unique<RaftPeer>(std::move(peer_data), std::make_shared<protos::raft::Raft::Stub>(channel));
+  auto agree_count = 0;
+  for (const auto &peer : agreers) {
+    for (const auto &config_peer : config.peers()) {
+      std::cout << "peer " << peer << " config_peer " << config_peer.id() << std::endl;
+      if (config_peer.id() == peer) agree_count++;
+    }
+  }
+  std::cout << "agreement " << (agree_count > (config.peers_size() / 2)) << std::endl;
+  return agree_count > (config.peers_size() / 2);
 }
 
 RaftPeer::RaftPeer(protos::raft::Peer peer, std::shared_ptr<protos::raft::Raft::StubInterface> connection)
     : peer(std::move(peer)), connection(std::move(connection)) {}
 const PeerId &RaftPeer::peerId() const { return peer.id(); }
+bool RaftPeer::active() { return active_in_base_config || !active_in_configs.empty(); }
 
 Raft::Raft(std::unique_ptr<RaftConfig> config, const protos::raft::RaftState &save_state)
-    : raft_config_(std::move(config)) {}
+    : raft_config_(std::move(config)) {
+  std::cout << "started and i am " << raft_config_->me.id() << std::endl;
+  registerNewConfig(0, raft_config_->starting_config, true);
+}
 
 bool Raft::run() {
   bool running = false;
@@ -69,13 +74,15 @@ void Raft::worker() {
 
     {
       std::lock_guard<std::mutex> lock_guard(*lock_);
+      std::cout << "worker running " << role_ << " "
+                << (std::chrono::system_clock::now() - last_heartbeat_ > ElectionTimeout) << std::endl;
 
       if (role_ == FOLLOWER) {
         if (std::chrono::system_clock::now() - last_heartbeat_ > ElectionTimeout) {
-          auto new_term = current_term_ + 1;
           current_term_++;
           role_ = CANDIDATE;
           sent_vote_requests_ = false;
+          std::cout << "became candidate" << std::endl;
         }
       } else if (role_ == CANDIDATE) {
         updateLeaderElection();
@@ -98,25 +105,25 @@ void Raft::updateLeaderElection() {
   if (!sent_vote_requests_) {
     protos::raft::RequestVoteRequest request = {};
     votes_received_.clear();
+    if (getPeer(raft_config_->me.id()).active()) votes_received_.emplace_back(raft_config_->me.id());
 
     for (const auto &peer : peers_) {
-      if (!peer->active_in_configs.empty()) {
-        auto call = RaftPeer::RequestVoteCall();
-        peer->last_call = call;
-        call->request = request;
-        peer->connection->async()->RequestVote(&call->client_context, &call->request, &call->response,
-                                               [call](const grpc::Status &status) {
-                                                 call->status = status;
-                                                 call->complete = true;
-                                               });
-      }
+      if (peer->active() || peer->peerId() == raft_config_->me.id()) continue;
+      auto call = RaftPeer::RequestVoteCall();
+      peer->last_call = call;
+      call->request = request;
+      peer->connection->async()->RequestVote(&call->client_context, &call->request, &call->response,
+                                             [call](const grpc::Status &status) {
+                                               call->status = status;
+                                               call->complete = true;
+                                             });
     }
     sent_vote_requests_ = true;
   } else {
     auto remaining_voter_count = 0;
 
     for (const auto &peer : peers_) {
-      if (peer->active_in_configs.empty()) continue;
+      if (peer->active() || peer->peerId() == raft_config_->me.id()) continue;
       if (!std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call)) continue;
 
       auto &call = std::get<RaftPeer::RequestVoteCall>(peer->last_call);
@@ -138,12 +145,14 @@ void Raft::updateLeaderElection() {
     }
 
     if (checkAllConfigsAgreement(votes_received_)) {
+      std::cout << "won election" << std::endl;
       role_ = LEADER;
       for (const auto &p : peers_) {
         p->match_index = 0;
         p->next_index = log_size_;
       }
     } else if (remaining_voter_count == 0) {
+      std::cout << "lost election" << std::endl;
       role_ = FOLLOWER;
     }
   }
@@ -157,7 +166,7 @@ void Raft::updateIndices() {
 
 void Raft::updateFollowers() {
   for (const auto &peer : peers_) {
-    if (me_ == peer->peerId()) continue;
+    if (raft_config_->me.id() == peer->peerId()) continue;
     auto peer_id = peer->peerId();
     if (std::holds_alternative<std::monostate>(peer->last_call)
         || std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call))
@@ -228,7 +237,7 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   if (peer->snapshot_id != snapshot_.snapshot_id() || peer->chunk_offset != snapshot_.chunk_count()) {
     auto call = RaftPeer::InstallSnapshotCall();
     call->request.set_term(current_term_);
-    call->request.set_leader_id(me_);
+    call->request.set_leader_id(raft_config_->me.id());
 
     call->request.set_snapshot_id(snapshot_.snapshot_id());
     if (peer->snapshot_id != snapshot_.snapshot_id()) call->request.set_chunk_offset(0);
@@ -245,7 +254,7 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   } else {
     auto call = RaftPeer::AppendEntriesCall();
     call->request.set_term(current_term_);
-    call->request.set_leader_id(me_);
+    call->request.set_leader_id(raft_config_->me.id());
 
     call->request.set_prev_log_index(peer->next_index - 1);
     if (log_offset_ == peer->next_index) call->request.set_prev_log_term(atLogIndex(peer->next_index).term());
@@ -340,6 +349,12 @@ grpc::Status Raft::Start(::grpc::ServerContext *context, const ::protos::raft::S
   entry.mutable_log_data()->CopyFrom(request->log_data());
   entry.set_data_valid(false);
 
+  if (request->log_data().type() == protos::raft::LogDataType::CONFIG) {
+    protos::raft::Config config = {};
+    config.ParseFromString(entry.log_data().data());
+    registerNewConfig(log_index, config, false);
+  }
+
   log_.emplace_back(std::move(entry));
 
   response->set_log_index(log_index);
@@ -357,6 +372,31 @@ grpc::Status Raft::InstallSnapshot(::grpc::ServerContext *context,
                                    const ::protos::raft::InstallSnapshotRequest *request,
                                    ::protos::raft::InstallSnapshotResponse *response) {
   return Service::InstallSnapshot(context, request, response);
+}
+RaftPeer &Raft::getPeer(const PeerId &peer_id) {
+  for (auto &peer : peers_) {
+    std::cout << "searching for " << peer_id << " and current peer is " << peer->peerId() << std::endl;
+    if (peer->peerId() == peer_id) return *peer;
+  }
+  throw std::runtime_error("no such peer");
+}
+void Raft::registerNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config) {
+  for (auto &config_peer : config.peers()) {
+    try {
+      auto peer = getPeer(config_peer.id());
+      if (!base_config && config_peer.voting()) peer.active_in_configs.emplace_back(log_index);
+      if (base_config && config_peer.voting()) peer.active_in_base_config = true;
+    } catch (const std::runtime_error &) {
+      auto channel = grpc::CreateChannel(config_peer.data().address(), grpc::InsecureChannelCredentials());
+      auto stub = protos::raft::Raft::NewStub(channel);
+      auto peer = std::make_unique<RaftPeer>(config_peer, std::move(stub));
+      if (!base_config && config_peer.voting()) peer->active_in_configs.emplace_back(log_index);
+      if (base_config && config_peer.voting()) peer->active_in_base_config = true;
+      peers_.emplace_back(std::move(peer));
+    }
+  }
+
+  if (base_config) base_config_.CopyFrom(config);
 }
 
 RaftClient::RaftClient(const protos::raft::Config &config) { config_.CopyFrom(config); }
@@ -382,6 +422,7 @@ LogIndex RaftClient::startConfig(const protos::raft::Config &config) {
 
 LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
   std::shared_lock<std::shared_mutex> lock(*lock_);
+  std::cout << "doing request" << std::endl;
 
   checkForCacheExistence(lock);
   auto &[leader_id, stub] = cached_connection_info_.value();
@@ -391,6 +432,7 @@ LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
   grpc::Status status = {};
   do {
     grpc::ClientContext client_context;
+    std::cout << "making request to " << leader_id << std::endl;
     status = stub->Start(&client_context, request, &response);
 
     if (status.ok() && response.data_case() == protos::raft::StartResponse::DataCase::kLeaderId)
@@ -405,41 +447,48 @@ LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
 void RaftClient::checkForCacheExistence(std::shared_lock<std::shared_mutex> &lock) {
   if (cached_connection_info_.has_value()) return;
 
+  std::cout << "checking cache" << std::endl;
   lock.unlock();
-  std::unique_lock<std::shared_mutex> write_lock(*lock_);
-  if (cached_connection_info_.has_value()) {
-    lock.lock();
-    return;
-  }
+  std::cout << "checking cache unlock" << std::endl;
+  {
+    std::unique_lock<std::shared_mutex> write_lock(*lock_);
+    if (cached_connection_info_.has_value()) {
+      lock.lock();
+      return;
+    }
 
-  auto &peer = config_.peers(0);
-  auto channel = grpc::CreateChannel(peer.data().address(), grpc::InsecureChannelCredentials());
-  auto stub = protos::raft::Raft::NewStub(channel);
-  cached_connection_info_ = {peer.id(), std::move(stub)};
+    auto &peer = config_.peers(0);
+    auto channel = grpc::CreateChannel(peer.data().address(), grpc::InsecureChannelCredentials());
+    auto stub = protos::raft::Raft::NewStub(channel);
+    cached_connection_info_ = {peer.id(), std::move(stub)};
+  }
 
   lock.lock();
 }
 void RaftClient::updateCache(std::shared_lock<std::shared_mutex> &lock, const std::string &leader_id) {
   lock.unlock();
-  std::unique_lock<std::shared_mutex> write_lock(*lock_);
-  if (cached_connection_info_->first == leader_id) {
-    lock.lock();
-    return;
-  }
 
-  for (auto &peer : config_.peers()) {
-    if (peer.id() == leader_id) {
-      auto channel = grpc::CreateChannel(peer.data().address(), grpc::InsecureChannelCredentials());
-      auto stub = protos::raft::Raft::NewStub(channel);
-      cached_connection_info_ = {peer.id(), std::move(stub)};
-
+  bool updated = true;
+  {
+    std::unique_lock<std::shared_mutex> write_lock(*lock_);
+    if (cached_connection_info_->first == leader_id) {
       lock.lock();
       return;
+    }
+
+    for (auto &peer : config_.peers()) {
+      if (peer.id() == leader_id) {
+        auto channel = grpc::CreateChannel(peer.data().address(), grpc::InsecureChannelCredentials());
+        auto stub = protos::raft::Raft::NewStub(channel);
+        cached_connection_info_ = {peer.id(), std::move(stub)};
+        updated = true;
+        break;
+      }
     }
   }
 
   lock.lock();
-  throw std::runtime_error("no such peer");
+  if (!updated) throw std::runtime_error("no such peer");
 }
 
 }// namespace flashpoint::raft
