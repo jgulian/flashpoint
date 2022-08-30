@@ -4,6 +4,9 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <optional>
+
+#include "containers/concurrent_queue.hpp"
 
 namespace flashpoint::util {
 
@@ -62,14 +65,22 @@ class SimpleLogger : public Logger {
  public:
   explicit SimpleLogger(const LogLevel &log_level = LogLevel::INFO);
 
-  ~SimpleLogger() override = default;
-
   void msg(LogLevel log_level, const std::string &message) override;
 
   void worker();
 
  private:
   bool supports_colored_text_ = true;
+};
+
+class ManualLogger : public Logger {
+ public:
+  void msg(LogLevel log_level, const std::string &message) override;
+  bool worker();
+
+ private:
+  std::atomic<bool> working_ = false;
+  containers::ConcurrentQueue<std::string> queue_ = {};
 };
 
 static std::unique_ptr<Logger> LOGGER;

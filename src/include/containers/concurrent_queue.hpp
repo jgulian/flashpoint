@@ -4,12 +4,13 @@
 #include <atomic>
 #include <memory>
 
+namespace flashpoint::containers {
+
 template<class T>
 class ConcurrentQueue {
   struct ConcurrentQueueNode {
     std::shared_ptr<T> data;
     std::atomic<std::shared_ptr<ConcurrentQueueNode>> next;
-    std::atomic<bool> active;
   };
 
   std::atomic<std::shared_ptr<ConcurrentQueueNode>> head_;
@@ -27,5 +28,7 @@ class ConcurrentQueue {
     }
   }
 };
+
+}// namespace flashpoint::containers
 
 #endif//FLASHPOINT_CONCURRENT_LINKED_LIST_HPP

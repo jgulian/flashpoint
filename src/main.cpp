@@ -1,14 +1,20 @@
 #include <CLI/App.hpp>
 
 #include "cmd/cmd.hpp"
+#include "util/env.hpp"
 #include "util/logger.hpp"
+
+
 using namespace flashpoint;
 
 void setup_globals() {
-  util::LOGGER = std::make_unique<util::SimpleLogger>();
+  util::LoadEnvironmentVariables();
+  util::LOGGER = std::make_unique<util::ManualLogger>();
 }
 
 int main(int argc, char **argv) {
+  setup_globals();
+
   CLI::App app{"Flashpoint key/value db"};
 
   cmd::GetCommandArgs get_args;
