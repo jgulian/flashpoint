@@ -24,9 +24,6 @@ int main(int argc, char **argv) {
   CLI::App *put = cmd::setupPutSubcommand(app, put_args);
   CLI::App *start = cmd::setupStartSubcommand(app, start_args);
 
-  for (int i = 0; i < argc; i++)
-    std::cout << argv[i] << std::endl;
-
   try {
     app.parse(argc, argv);
   } catch (const CLI::ParseError &e) {

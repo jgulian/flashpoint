@@ -88,7 +88,7 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
 
   switch (operation.data_case()) {
     case Operation::kGet: {
-      auto &key = operation.put().args().key();
+      auto &key = operation.get().args().key();
       if (key.empty() || !data_.contains(key)) {
         operation.mutable_status()->set_code(protos::kv::KeyNotFound);
         operation.mutable_status()->set_info(key + " not found");
