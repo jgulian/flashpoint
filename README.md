@@ -1,8 +1,4 @@
-# Flashpoint
-
-Todo list
-
-1. build key value raft plugin
+# :zap: Flashpoint
 
 Pre-release alpha goals
 
