@@ -44,8 +44,7 @@ CLI::App *setupPutSubcommand(CLI::App &app, PutCommandArgs &command_args) {
 CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args) {
   CLI::App *start = app.add_subcommand("start");
 
-  start->add_option("-a,--address", command_args.host_address, "host address")->default_str(command_args.host_address);
-  start->add_option("-r,--raft", command_args.config_file, "config file for raft")->required();
+  start->add_option("-c,--config", command_args.config_file, "config file for key-value and raft")->required();
   start->add_option("-s,--snapshot", command_args.snapshot_file, "file to use to store snapshots");
 
   return start;
@@ -105,7 +104,7 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   }
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
-  keyvalue::KeyValueService service = {command_args.host_address, command_args.config_file};
+  keyvalue::KeyValueService service = {command_args.config_file};
   service.run();
   std::cout << "starting server" << std::endl;
   while (service.update()) util::logger->worker();

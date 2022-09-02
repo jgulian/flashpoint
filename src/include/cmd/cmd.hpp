@@ -29,8 +29,7 @@ struct PutCommandArgs {
 };
 
 struct StartCommandArgs {
-  std::string host_address = "localhost:3308";
-  std::string config_file = "";
+  std::string config_file;
   std::string snapshot_file;
 };
 

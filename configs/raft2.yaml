@@ -1,0 +1,6 @@
+me: server2
+host_address: "localhost:3310"
+raft_config:
+  server1: "localhost:3309"
+  server2: "localhost:3311"
+  server3: "localhost:3313"

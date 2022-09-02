@@ -61,7 +61,7 @@ class KeyValueService {
   std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
 
  public:
-  KeyValueService(const std::string &address, const std::string &config_file);
+  KeyValueService(const std::string &config_file);
 
   void run();
   bool update();

@@ -22,9 +22,9 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
   return grpc::Status::OK;
 }
 
-KeyValueService::KeyValueService(const std::string &address, const std::string &config_file) {
+KeyValueService::KeyValueService(const std::string &config_file) {
   auto config = YAML::LoadFile(config_file);
-  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"])
+  if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"] || !config["host_address"])
     throw std::runtime_error("config file not formatted correctly.");
 
   protos::raft::Config starting_config = {};
@@ -61,9 +61,11 @@ KeyValueService::KeyValueService(const std::string &address, const std::string &
   key_value_server_ = std::make_unique<KeyValueServer>(*this);
 
   auto &raft_host_address = me.data().address();
-  grpc_server_builder_.AddListeningPort(address, grpc::InsecureServerCredentials());
+  auto kv_host_address = config["host_address"].as<std::string>();
+
+  grpc_server_builder_.AddListeningPort(kv_host_address, grpc::InsecureServerCredentials());
   grpc_server_builder_.AddListeningPort(raft_host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder_.RegisterService(address, key_value_server_.get());
+  grpc_server_builder_.RegisterService(kv_host_address, key_value_server_.get());
   grpc_server_builder_.RegisterService(raft_host_address, raft_server_.get());
 }
 
