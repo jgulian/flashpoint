@@ -6,7 +6,7 @@
 #include <string>
 #include <optional>
 
-#include "containers/concurrent_queue.hpp"
+#include "containers/concurrent_linked_list.hpp"
 
 namespace flashpoint::util {
 
