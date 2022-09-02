@@ -4,10 +4,10 @@ namespace flashpoint::keyvalue {
 
 
 KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
-KeyValueServer::~KeyValueServer() {}
 
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                                  ::protos::kv::Operation *response) {
+  std::cout << "key: " << request->key() << std::endl;
   auto operation_future = service_.get(request->key())->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
@@ -15,7 +15,8 @@ grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos:
 }
 grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
                                  ::protos::kv::Operation *response) {
-  auto operation_future = service_.put(request->key(), request->value())->get_future();
+  auto operation = service_.put(request->key(), request->value());
+  auto operation_future = operation->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
   return grpc::Status::OK;

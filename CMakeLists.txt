@@ -15,8 +15,6 @@ ELSE ()
 ENDIF ()
 
 # Dependencies
-find_package(Threads)
-
 include(FetchContent)
 FetchContent_Declare(
         cli11

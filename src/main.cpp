@@ -9,7 +9,6 @@ using namespace flashpoint;
 
 void setup_globals() {
   util::LoadEnvironmentVariables();
-  util::LOGGER = std::make_unique<util::ManualLogger>();
 }
 
 int main(int argc, char **argv) {

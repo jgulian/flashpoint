@@ -1,14 +1,16 @@
 #ifndef FLASHPOINT_SRC_INCLUDE_UTIL_LOGGER_HPP_
 #define FLASHPOINT_SRC_INCLUDE_UTIL_LOGGER_HPP_
 
+#include <atomic>
 #include <iostream>
 #include <memory>
-#include <string>
 #include <optional>
-
-#include "containers/concurrent_linked_list.hpp"
+#include <queue>
+#include <string>
 
 namespace flashpoint::util {
+
+constexpr unsigned int log_size_limit = 30;
 
 enum class LogLevel {
   FATAL = 5,
@@ -21,11 +23,11 @@ enum class LogLevel {
 
 class Logger {
  public:
-  explicit Logger(const LogLevel &log_level) : log_level_(log_level) {}
-
+  explicit Logger() : log_level_(LogLevel::ALL) {}
   virtual ~Logger() = default;
 
   virtual void msg(LogLevel log_level, const std::string &message) = 0;
+  virtual bool worker() = 0;
 
   template<typename... Args>
   void msg(LogLevel log_level, const std::string &format, Args... args) {
@@ -57,17 +59,15 @@ class Logger {
     msg(LogLevel::ERROR2, format, args...);
   }
 
+
  protected:
   LogLevel log_level_;
 };
 
 class SimpleLogger : public Logger {
  public:
-  explicit SimpleLogger(const LogLevel &log_level = LogLevel::INFO);
-
   void msg(LogLevel log_level, const std::string &message) override;
-
-  void worker();
+  bool worker() override;
 
  private:
   bool supports_colored_text_ = true;
@@ -76,14 +76,16 @@ class SimpleLogger : public Logger {
 class ManualLogger : public Logger {
  public:
   void msg(LogLevel log_level, const std::string &message) override;
-  bool worker();
+  bool worker() override;
 
  private:
   std::atomic<bool> working_ = false;
-  containers::ConcurrentQueue<std::string> queue_ = {};
+  std::mutex lock_ = {};
+  std::atomic<unsigned int> size = 0;
+  std::queue<std::string> queue_ = {};
 };
 
-static std::unique_ptr<Logger> LOGGER;
+static std::unique_ptr<Logger> logger = std::make_unique<ManualLogger>();
 
 }// namespace flashpoint::util
 

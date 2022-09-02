@@ -6,7 +6,7 @@
 RaftException::RaftException(RaftExceptionType exception_type) : exception_type_(exception_type) {}
 RaftException::RaftException(RaftExceptionType exception_type, const std::string &custom_message)
     : exception_type_(exception_type), custom_message_(custom_message) {}
-
+const char *RaftException::what() const noexcept {
   switch (exception_type_) {
     case ProcessAlreadyRunning: return "";
     case ProcessNotRunning: return "";

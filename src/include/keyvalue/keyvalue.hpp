@@ -34,7 +34,7 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
   KeyValueService &service_;
  public:
   explicit KeyValueServer(KeyValueService &service);
-  ~KeyValueServer() override;
+  ~KeyValueServer() override = default;
 
   grpc::Status Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                    ::protos::kv::Operation *response) override;
@@ -58,7 +58,7 @@ class KeyValueService {
   grpc::ServerBuilder grpc_server_builder_;
   std::unique_ptr<grpc::Server> grpc_server_;
 
-  std::unique_ptr<std::shared_mutex> lock_;
+  std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
 
  public:
   KeyValueService(const std::string &address, const std::string &config_file);

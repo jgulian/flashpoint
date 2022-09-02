@@ -98,7 +98,7 @@ void Raft::worker() {
     if (std::chrono::system_clock::now() < current_time + sleep_for)
       std::this_thread::sleep_until(current_time + sleep_for);
     else
-      util::LOGGER->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
+      util::logger->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
   }
 }
 void Raft::updateLeaderElection() {

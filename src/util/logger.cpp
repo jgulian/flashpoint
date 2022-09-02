@@ -1,5 +1,6 @@
 #include "util/logger.hpp"
 
+
 namespace flashpoint::util {
 
 void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
@@ -30,20 +31,25 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
   }
 }
 
-void SimpleLogger::worker() {}
-SimpleLogger::SimpleLogger(const LogLevel &log_level) : Logger(log_level) {}
+bool SimpleLogger::worker() { return false; }
+
+void ManualLogger::msg(LogLevel log_level, const std::string &message) {
+  std::lock_guard<std::mutex> lock(lock_);
+  queue_.push(message);
+  size++;
+}
 
 bool ManualLogger::worker() {
-  bool working = false;
-  auto ok = working_.compare_exhange_strong(true, &working);
+  if (ManualLogger::size < log_size_limit) return false;
 
-  if (!ok) return false;
+  std::lock_guard<std::mutex> lock(ManualLogger::lock_);
+  while (!ManualLogger::queue_.empty()) {
+    std::cout << ManualLogger::queue_.front();
+    ManualLogger::queue_.pop();
+    ManualLogger::size--;
+  }
 
-
-
-  while (!working_.compare_exhange_strong(false, &working));
   return true;
 }
-void ManualLogger::msg(LogLevel log_level, const std::string &message) {}
 
 }// namespace flashpoint::util

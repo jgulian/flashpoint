@@ -108,8 +108,7 @@ void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
   keyvalue::KeyValueService service = {command_args.host_address, command_args.config_file};
   service.run();
   std::cout << "starting server" << std::endl;
-  while (service.update())
-    ;
+  while (service.update()) util::logger->worker();
 }
 
 }// namespace flashpoint::cmd

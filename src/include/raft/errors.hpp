@@ -27,7 +27,7 @@ class RaftException : std::exception {
   RaftException(RaftExceptionType exception_type, const std::string &custom_message);
 
  private:
-  const char *what() const _NOEXCEPT override;
+  [[nodiscard]] const char *what() const _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_NOTHROW override;
 };
 
 #endif//FLASHPOINT_ERRORS_HPP
