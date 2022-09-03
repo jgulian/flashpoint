@@ -217,7 +217,7 @@ void Raft::updateFollowers() {
 
       if (call->response.success()) {
         if (!call->request.entries().empty()) {
-          auto updated_to = call->request.entries().end()->index();
+          auto updated_to = call->request.entries(call->request.entries_size() - 1).index();
           std::cout << "UPDATED FOLLOWER " << updated_to << " " << updated_to + 1 << std::endl;
           peer->match_index = updated_to;
           peer->next_index = updated_to + 1;
@@ -288,17 +288,15 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
                                         ? snapshot_.last_included_term()
                                         : atLogIndex(call->request.prev_log_index()).term());
 
-    for (auto entry = log_.begin() + static_cast<int>(peer->next_index - log_offset_); entry != log_.end(); ++entry)
-      call->request.mutable_entries()->Add()->CopyFrom(*entry);
-
+    for (auto i = peer->next_index; i < log_size_; i++) call->request.mutable_entries()->Add()->CopyFrom(atLogIndex(i));
     call->request.set_leader_commit_index(commit_index_);
 
-    peer->connection->async()->AppendEntries(&call->client_context, &call->request, &call->response,
-                                             [call](const grpc::Status &status) {
+    peer->connection->async()->AppendEntries(
+        &call->client_context, &call->request, &call->response, [call](const grpc::Status &status) {
           std::cout << "CALL COMPLETED " << status.ok() << " error: " << status.error_message() << std::endl;
           call->status = status;
           call->complete = true;
-                                             });
+        });
   }
 }
 const protos::raft::LogEntry &Raft::atLogIndex(LogIndex index) {
@@ -443,7 +441,7 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
     log_.emplace_back(entry);
   }//TODO: not before commit index?
 
-  std::cout << "append entries receive successful on client" << std::endl;
+  std::cout << "append entries receive successful on client " << request->entries_size() << std::endl;
   response->set_success(true);
   return grpc::Status::OK;
 }

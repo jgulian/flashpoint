@@ -13,6 +13,7 @@ Alpha goals (Target: Oct 2)
    2. Enhance naming (raft config -> raft settings)
    3. Review math (simplify prev log index)
    4. Make config me a reference to peers_ me
+   5. Decide on a code style
 3. Support snapshots
 4. Support sharding
 5. Review TODOs
@@ -25,3 +26,4 @@ Official Release goals (Target: Dec 22)
 * start config on leader cmd
 * allow users to create (yaml) config file for plugins and server
 * use ASan in tests
+* Aries
