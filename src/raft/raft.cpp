@@ -432,13 +432,14 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
   if (request->prev_log_index() < log_size_ - 1)
     log_.erase(log_.begin() + static_cast<int>(request->prev_log_index() - log_offset_ + 1), log_.end());
 
-  last_log_index = log_offset_ - 1;
-
   commit_index_ = std::min(request->leader_commit_index(), last_log_index);
+  std::cout << "COMMIT INDEX: " << commit_index_ << " because " << request->leader_commit_index() << " "
+            << last_log_index << std::endl;
   last_heartbeat_ = std::chrono::system_clock::now();
   for (const auto &entry : request->entries()) {
     std::cout << "added log entry from leader" << std::endl;
     log_.emplace_back(entry);
+    log_size_++;
   }//TODO: not before commit index?
 
   std::cout << "append entries receive successful on client " << request->entries_size() << std::endl;
