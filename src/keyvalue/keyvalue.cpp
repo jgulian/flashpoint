@@ -57,7 +57,7 @@ KeyValueService::KeyValueService(const std::string &config_file) {
   };
 
   raft_server_ = std::make_unique<raft::Raft>(std::move(raft_config));
-  raft_client_ = std::make_unique<raft::RaftClient>(starting_config);
+  raft_client_ = std::make_unique<raft::RaftClient>(me.id(), starting_config);
   key_value_server_ = std::make_unique<KeyValueServer>(*this);
 
   auto &raft_host_address = me.data().address();

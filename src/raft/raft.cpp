@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "raft/raft.hpp"
 
 namespace flashpoint::raft {
@@ -432,6 +434,7 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
   if (request->prev_log_index() < log_size_ - 1)
     log_.erase(log_.begin() + static_cast<int>(request->prev_log_index() - log_offset_ + 1), log_.end());
 
+  leader_ = request->leader_id();
   commit_index_ = std::min(request->leader_commit_index(), last_log_index);
   std::cout << "COMMIT INDEX: " << commit_index_ << " because " << request->leader_commit_index() << " "
             << last_log_index << std::endl;
@@ -440,7 +443,7 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
     std::cout << "added log entry from leader" << std::endl;
     log_.emplace_back(entry);
     log_size_++;
-  }//TODO: not before commit index?
+  }
 
   std::cout << "append entries receive successful on client " << request->entries_size() << std::endl;
   response->set_success(true);
@@ -512,7 +515,7 @@ void Raft::registerNewConfig(LogIndex log_index, const protos::raft::Config &con
   if (base_config) base_config_.CopyFrom(config);
 }
 
-RaftClient::RaftClient(const protos::raft::Config &config) { config_.CopyFrom(config); }
+RaftClient::RaftClient(PeerId me, const protos::raft::Config &config) : me_(std::move(me)) { config_.CopyFrom(config); }
 
 void RaftClient::updateConfig(const protos::raft::Config &config) {
   std::unique_lock<std::shared_mutex> write_lock(*lock_);
@@ -541,18 +544,35 @@ LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
   auto &[leader_id, stub] = cached_connection_info_.value();
 
   auto time = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock, std::chrono::system_clock::duration> last_call;
   protos::raft::StartResponse response = {};
   grpc::Status status = {};
   do {
     grpc::ClientContext client_context;
+    last_call = std::chrono::system_clock::now();
+    auto deadline = last_call + StartRequestBuffer;
+    client_context.set_deadline(deadline);
+
     std::cout << "making request to " << leader_id << std::endl;
     status = stub->Start(&client_context, request, &response);
 
-    if (status.ok() && response.data_case() == protos::raft::StartResponse::DataCase::kLeaderId)
+
+    if (status.ok())
+      std::cout << response.data_case() << " == " << protos::raft::StartResponse::DataCase::kLeaderId
+                << " ok so leader is " << response.leader_id() << std::endl;
+    else
+      std::cout << "not ok" << std::endl;
+
+    if (!status.ok()) updateCache(lock, me_);
+    else if (status.ok() && response.data_case() == protos::raft::StartResponse::DataCase::kLeaderId)
       updateCache(lock, response.leader_id());
 
-    if (std::chrono::system_clock::now() - time > StartRequestTimeout)
+    if (std::chrono::system_clock::now() - time > StartRequestTimeout) {
+      std::cout << "request timeout" << std::endl;
       throw std::runtime_error("start request timeout");
+    }
+
+    if (std::chrono::system_clock::now() < deadline) std::this_thread::sleep_until(deadline);
   } while (!status.ok() || response.data_case() != protos::raft::StartResponse::DataCase::kLogIndex);
 
   return response.log_index();
@@ -566,6 +586,7 @@ void RaftClient::checkForCacheExistence(std::shared_lock<std::shared_mutex> &loc
   {
     std::unique_lock<std::shared_mutex> write_lock(*lock_);
     if (cached_connection_info_.has_value()) {
+      write_lock.unlock();
       lock.lock();
       return;
     }
@@ -581,10 +602,14 @@ void RaftClient::checkForCacheExistence(std::shared_lock<std::shared_mutex> &loc
 void RaftClient::updateCache(std::shared_lock<std::shared_mutex> &lock, const std::string &leader_id) {
   lock.unlock();
 
-  bool updated = true;
+  std::cout << "updating cache to " << leader_id << std::endl;
   {
     std::unique_lock<std::shared_mutex> write_lock(*lock_);
+    std::cout << "peers: " << std::endl;
+    for (auto &peer : config_.peers()) std::cout << peer.id() << std::endl;
+
     if (cached_connection_info_->first == leader_id) {
+      write_lock.unlock();
       lock.lock();
       return;
     }
@@ -594,14 +619,15 @@ void RaftClient::updateCache(std::shared_lock<std::shared_mutex> &lock, const st
         auto channel = grpc::CreateChannel(peer.data().address(), grpc::InsecureChannelCredentials());
         auto stub = protos::raft::Raft::NewStub(channel);
         cached_connection_info_ = {peer.id(), std::move(stub)};
-        updated = true;
-        break;
+        write_lock.unlock();
+        lock.lock();
+        return;
       }
     }
   }
 
   lock.lock();
-  if (!updated) throw std::runtime_error("no such peer");
+  throw std::runtime_error("no such peer");
 }
 
 }// namespace flashpoint::raft

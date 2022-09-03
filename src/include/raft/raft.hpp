@@ -41,7 +41,8 @@ constexpr auto MaxSleepTime = 500ms;
 
 const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;
 
-constexpr auto StartRequestTimeout = 500ms;
+constexpr auto StartRequestBuffer = 100ms;
+constexpr auto StartRequestTimeout = 1000ms;
 
 struct RaftConfig {
   protos::raft::Peer me;
@@ -165,12 +166,13 @@ class Raft : public protos::raft::Raft::Service {
 
 class RaftClient {
  private:
+  PeerId me_;
   protos::raft::Config config_ = {};
   std::optional<std::pair<std::string, RaftConnection>> cached_connection_info_ = std::nullopt;
   std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
 
  public:
-  explicit RaftClient(const protos::raft::Config &config);
+  explicit RaftClient(PeerId me, const protos::raft::Config &config);
 
   void updateConfig(const protos::raft::Config &config);
 
