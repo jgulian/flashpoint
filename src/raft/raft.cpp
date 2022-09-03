@@ -181,7 +181,7 @@ void Raft::updateFollowers() {
               << std::holds_alternative<RaftPeer::InstallSnapshotCall>(peer->last_call) << " "
               << std::holds_alternative<RaftPeer::AppendEntriesCall>(peer->last_call) << std::endl;
     if (std::holds_alternative<RaftPeer::InstallSnapshotCall>(peer->last_call)) {
-      std::cout << "wrong2" << std::endl;
+      std::cout << "wrong2 " << peer->peerId() << std::endl;
       const auto call = std::get<RaftPeer::InstallSnapshotCall>(peer->last_call);
       if (!call->complete) continue;
       if (!call->status.ok()) {
@@ -231,20 +231,19 @@ void Raft::updateFollowers() {
             || call->response.conflict_term() < snapshot_.last_included_term()
                 && call->response.conflict_term() != -1) {
           // A snapshot is required
-          updateFollower(peer);
-          return;
+        } else {
+          if (call->response.conflict_term() != -1)
+            for (auto entry = log_.rbegin(); entry != log_.rend(); ++entry)
+              if (entry->term() == call->response.conflict_term()) {
+                next_index = entry->index();
+                break;
+              }
+
+          peer->next_index = next_index;
         }
-
-        if (call->response.conflict_term() != -1)
-          for (auto entry = log_.rbegin(); entry != log_.rend(); ++entry)
-            if (entry->term() == call->response.conflict_term()) {
-              next_index = entry->index();
-              break;
-            }
-
-        peer->next_index = next_index;
-        updateFollower(peer);
       }
+
+      updateFollower(peer);
     } else {
       std::cout << "wrong1" << std::endl;
       updateFollower(peer);
@@ -255,7 +254,8 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   grpc::ClientContext client_context = {};
   grpc::Status status;
 
-
+  std::cout << "install snapshot on " << peer->peerId() << " if " << peer->next_index << " < " << log_offset_
+            << std::endl;
   if (peer->next_index < log_offset_) {
     auto call =
         std::make_shared<RaftPeer::Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse>>();
@@ -443,6 +443,8 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
     log_.emplace_back(entry);
   }//TODO: not before commit index?
 
+  std::cout << "append entries receive successful on client" << std::endl;
+  response->set_success(true);
   return grpc::Status::OK;
 }
 grpc::Status Raft::RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request,
