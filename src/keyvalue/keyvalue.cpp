@@ -85,6 +85,7 @@ KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
   return operation_result;
 }
 void KeyValueService::finish(const protos::raft::LogEntry &entry) {
+  std::cout << "finishing operation" << std::endl;
   Operation operation = {};
   operation.ParseFromString(entry.log_data().data());
 

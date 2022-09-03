@@ -10,8 +10,12 @@ Alpha goals (Target: Oct 2)
 1. Make keyvalue callback based
 2. Clean up code
    1. Make raft log entry data use configs without serialization
+   2. Enhance naming (raft config -> raft settings)
+   3. Review math (simplify prev log index)
+   4. Make config me a reference to peers_ me
 3. Support snapshots
 4. Support sharding
+5. Review TODOs
 
 Official Release goals (Target: Dec 22)
 

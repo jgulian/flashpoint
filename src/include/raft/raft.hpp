@@ -70,7 +70,7 @@ struct RaftPeer {
   using RequestVoteCall = std::shared_ptr<Call<protos::raft::RequestVoteRequest, protos::raft::RequestVoteResponse>>;
 
   protos::raft::Peer peer = {};
-  LogIndex match_index = 0, next_index = 0;
+  LogIndex match_index = 0, next_index = 1;
   SnapshotId snapshot_id = 0, chunk_offset = 0;
   RaftConnection connection = nullptr;
   bool active_in_base_config = false;
@@ -103,7 +103,7 @@ class Raft : public protos::raft::Raft::Service {
   std::vector<protos::raft::LogEntry> log_ = {};
   protos::raft::Config base_config_ = {};
   std::list<LogIndex> proposed_configs_ = {};
-  LogIndex log_offset_ = 0, log_size_ = 0;
+  LogIndex log_offset_ = 1, log_size_ = 1;
   LogTerm current_term_ = 0;
   std::optional<PeerId> voted_for_ = std::nullopt;
   protos::raft::Snapshot snapshot_ = {};
