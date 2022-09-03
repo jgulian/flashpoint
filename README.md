@@ -1,15 +1,19 @@
 # :zap: Flashpoint
 
-Pre-release alpha goals
+Pre-release alpha goals (Target: Sep 4)
 
 1. Get core service working
-   1. Create file config for raft
-   2. Make key value start configs and commands
-2. Make keyvalue callback based
-3. Clean up code
-   1. Make raft log entry data use configs without serialization
+   1. Get general 3 participant replication work
 
-Official Release goals
+Alpha goals (Target: Oct 2)
+
+1. Make keyvalue callback based
+2. Clean up code
+   1. Make raft log entry data use configs without serialization
+3. Support snapshots
+4. Support sharding
+
+Official Release goals (Target: Dec 22)
 
 * increase warnings and generally clean up code
 * write tests
@@ -17,5 +21,3 @@ Official Release goals
 * start config on leader cmd
 * allow users to create (yaml) config file for plugins and server
 * use ASan in tests
-* use concurrent channel (like linked list) for apply msg
-* rethink threading
