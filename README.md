@@ -1,4 +1,4 @@
-# :zap: Flashpoint
+# :zap: Flashpoint Key-Value
 
 Pre-release alpha goals (Target: Sep 4)
 
