@@ -7,7 +7,6 @@ KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
 
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
                                  ::protos::kv::Operation *response) {
-  std::cout << "key: " << request->key() << std::endl;
   auto operation_future = service_.get(request->key())->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
@@ -78,14 +77,12 @@ bool KeyValueService::update() { return true; }
 void KeyValueService::kill() {}
 
 KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
-  std::cout << "starting operation " << operation.data_case() << std::endl;
   auto log_index = raft_client_->start(operation.SerializeAsString());
   auto operation_result = std::make_shared<std::promise<Operation>>();
   ongoing_transactions_[log_index] = operation_result;
   return operation_result;
 }
 void KeyValueService::finish(const protos::raft::LogEntry &entry) {
-  std::cout << "finishing operation" << std::endl;
   Operation operation = {};
   operation.ParseFromString(entry.log_data().data());
 

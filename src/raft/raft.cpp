@@ -5,25 +5,22 @@
 namespace flashpoint::raft {
 
 bool hasAgreement(const protos::raft::Config &config, const std::list<PeerId> &agreers) {
-  std::cout << "config " << config.peers_size() << " agreers " << agreers.size() << std::endl;
-
   auto agree_count = 0;
   for (const auto &peer : agreers) {
     for (const auto &config_peer : config.peers())
       if (config_peer.id() == peer) agree_count++;
   }
-  std::cout << "agreement " << (agree_count > (config.peers_size() / 2)) << std::endl;
+
   return agree_count > (config.peers_size() / 2);
 }
 
 RaftPeer::RaftPeer(protos::raft::Peer peer, std::shared_ptr<protos::raft::Raft::StubInterface> connection)
     : peer(std::move(peer)), connection(std::move(connection)) {}
 const PeerId &RaftPeer::peerId() const { return peer.id(); }
-bool RaftPeer::active() { return active_in_base_config || !active_in_configs.empty(); }
+bool RaftPeer::active() const { return active_in_base_config || !active_in_configs.empty(); }
 
 Raft::Raft(std::unique_ptr<RaftConfig> config, const protos::raft::RaftState &save_state)
     : raft_config_(std::move(config)) {
-  std::cout << "started and i am " << raft_config_->me.id() << std::endl;
   registerNewConfig(0, raft_config_->starting_config, true);
 }
 
@@ -74,23 +71,17 @@ void Raft::worker() {
 
     {
       std::lock_guard<std::mutex> lock_guard(*lock_);
-      std::cout << "worker running " << role_ << " " << current_term_ << " "
-                << (std::chrono::system_clock::now() - last_heartbeat_ > ElectionTimeout) << std::endl;
 
       if (role_ == FOLLOWER) {
-        std::cout << "i am a follower" << std::endl;
         if (std::chrono::system_clock::now() - last_heartbeat_ > ElectionTimeout) {
           current_term_++;
           role_ = CANDIDATE;
           sent_vote_requests_ = false;
-          std::cout << "became candidate" << std::endl;
         }
       } else if (role_ == CANDIDATE) {
         last_heartbeat_ = std::chrono::system_clock::now();
-        std::cout << "i am a candidate" << std::endl;
         updateLeaderElection();
       } else if (role_ == LEADER) {
-        std::cout << "i am a leader " << commit_index_ << std::endl;
         last_heartbeat_ = std::chrono::system_clock::now();
         updateIndices();
         updateFollowers();
@@ -146,7 +137,6 @@ void Raft::updateLeaderElection() {
       auto &response = call->response;
 
       if (response.vote_granted()) {
-        std::cout << "vote from " << peer->peerId() << " granted";
         votes_received_.emplace_back(peer->peerId());
       } else if (current_term_ < response.term()) {
         current_term_ = response.term();
@@ -158,7 +148,6 @@ void Raft::updateLeaderElection() {
     }
 
     if (checkAllConfigsAgreement(votes_received_)) {
-      std::cout << "won election" << std::endl;
       role_ = LEADER;
       leader_ = raft_config_->me.id();
       for (const auto &p : peers_) {
@@ -166,19 +155,11 @@ void Raft::updateLeaderElection() {
         p->next_index = log_size_;
       }
     } else if (remaining_voter_count == 0) {
-      std::cout << "lost election" << std::endl;
       role_ = FOLLOWER;
     }
   }
 }
 void Raft::updateIndices() {
-  auto agreers = agreersForIndex(commit_index_ + 1);
-  std::cout << "updating indices to maybe " << commit_index_ + 1 << " agreers: ";
-  for (auto &agreer : agreers) std::cout << agreer << " ";
-  std::cout << std::endl;
-
-  std::cout << "check " << (commit_index_ < log_size_) << " " << commit_index_ << " " << log_size_ << " "
-            << checkAllConfigsAgreement(agreers);
   while (commit_index_ < log_size_ && checkAllConfigsAgreement(agreersForIndex(commit_index_ + 1))) commit_index_++;
 }
 
@@ -186,12 +167,8 @@ void Raft::updateFollowers() {
   for (const auto &peer : peers_) {
     if (raft_config_->me.id() == peer->peerId()) continue;
     auto peer_id = peer->peerId();
-    std::cout << "variant " << std::holds_alternative<std::monostate>(peer->last_call) << " "
-              << std::holds_alternative<RaftPeer::RequestVoteCall>(peer->last_call) << " "
-              << std::holds_alternative<RaftPeer::InstallSnapshotCall>(peer->last_call) << " "
-              << std::holds_alternative<RaftPeer::AppendEntriesCall>(peer->last_call) << std::endl;
+
     if (std::holds_alternative<RaftPeer::InstallSnapshotCall>(peer->last_call)) {
-      std::cout << "wrong2 " << peer->peerId() << std::endl;
       const auto call = std::get<RaftPeer::InstallSnapshotCall>(peer->last_call);
       if (!call->complete) continue;
       if (!call->status.ok()) {
@@ -210,12 +187,9 @@ void Raft::updateFollowers() {
       updateFollower(peer);
     } else if (std::holds_alternative<RaftPeer::AppendEntriesCall>(peer->last_call)) {
       const auto call = std::get<RaftPeer::AppendEntriesCall>(peer->last_call);
-      std::cout << "append entries " << peer->peerId() << std::endl;
       if (!call->complete) continue;
-      std::cout << "append entries call completed" << std::endl;
       if (!call->status.ok()) {
         updateFollower(peer);
-        std::cout << "append entries call not ok" << std::endl;
         continue;
       }
 
@@ -228,14 +202,10 @@ void Raft::updateFollowers() {
       if (call->response.success()) {
         if (!call->request.entries().empty()) {
           auto updated_to = call->request.entries(call->request.entries_size() - 1).index();
-          std::cout << "UPDATED FOLLOWER " << updated_to << " " << updated_to + 1 << std::endl;
           peer->match_index = updated_to;
           peer->next_index = updated_to + 1;
-        } else {
-          std::cout << "entries empty" << std::endl;
         }
       } else {
-        std::cout << "append entries call failed" << std::endl;
         auto next_index = call->response.conflict_index();
         if (next_index <= snapshot_.last_included_index() && call->response.conflict_term() == -1
             || call->response.conflict_term() < snapshot_.last_included_term()
@@ -255,7 +225,6 @@ void Raft::updateFollowers() {
 
       updateFollower(peer);
     } else {
-      std::cout << "wrong1" << std::endl;
       updateFollower(peer);
     }
   }
@@ -264,8 +233,6 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
   grpc::ClientContext client_context = {};
   grpc::Status status;
 
-  std::cout << "install snapshot on " << peer->peerId() << " if " << peer->next_index << " < " << log_offset_
-            << std::endl;
   if (peer->next_index < log_offset_) {
     auto call =
         std::make_shared<RaftPeer::Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse>>();
@@ -303,7 +270,6 @@ void Raft::updateFollower(const std::unique_ptr<RaftPeer> &peer) {
 
     peer->connection->async()->AppendEntries(
         &call->client_context, &call->request, &call->response, [call](const grpc::Status &status) {
-          std::cout << "CALL COMPLETED " << status.ok() << " error: " << status.error_message() << std::endl;
           call->status = status;
           call->complete = true;
         });
@@ -315,7 +281,6 @@ const protos::raft::LogEntry &Raft::atLogIndex(LogIndex index) {
   return log_[index - log_offset_];
 }
 void Raft::commitEntries() {
-  std::cout << "committing entries" << std::endl;
   while (last_applied_ < commit_index_) {
     last_applied_++;
     auto &entry = atLogIndex(last_applied_);
@@ -350,11 +315,8 @@ bool Raft::checkAllConfigsAgreement(const std::list<PeerId> &agreers) {
 }
 std::list<PeerId> Raft::agreersForIndex(LogIndex index) {
   std::list<PeerId> result = {};
-  for (const auto &peer : peers_) {
-    std::cout << "peer: " << peer->peerId() << " match_index: " << peer->match_index << std::endl;
+  for (const auto &peer : peers_)
     if (index <= peer->match_index) result.emplace_back(peer->peerId());
-  }
-  std::cout << "agreers " << result.size() << " for index: " << index << std::endl;
   return result;
 }
 void Raft::fillWithChunk(protos::raft::InstallSnapshotRequest &request) {
@@ -404,9 +366,6 @@ grpc::Status Raft::Start(::grpc::ServerContext *context, const ::protos::raft::S
 grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos::raft::AppendEntriesRequest *request,
                                  ::protos::raft::AppendEntriesResponse *response) {
   std::lock_guard<std::mutex> lock_guard(*lock_);
-  std::cout << "append entries received" << std::endl;
-
-  if (!request->entries().empty()) { std::cout << "non empty entries" << std::endl; }
 
   response->set_term(current_term_);
   if (request->term() < current_term_) {
@@ -424,8 +383,6 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
     response->set_conflict_index(last_log_index + 1);
     response->set_conflict_term(-1);
     response->set_success(false);
-    std::cout << "here1"
-              << "last_log_index: " << last_log_index << " other: " << request->prev_log_index() << std::endl;
     return grpc::Status::OK;
   } else {
     auto conflict_term = log_size_ == log_offset_ ? snapshot_.last_included_term() : atLogIndex(log_size_ - 1).term();
@@ -435,7 +392,6 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
       while (log_offset_ < i && atLogIndex(i).term() != request->prev_log_term()) i--;
       response->set_conflict_index(i);
       response->set_success(false);
-      std::cout << "here2" << std::endl;
       return grpc::Status::OK;
     }
   }
@@ -445,23 +401,18 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
 
   leader_ = request->leader_id();
   commit_index_ = std::min(request->leader_commit_index(), last_log_index);
-  std::cout << "COMMIT INDEX: " << commit_index_ << " because " << request->leader_commit_index() << " "
-            << last_log_index << std::endl;
   last_heartbeat_ = std::chrono::system_clock::now();
   for (const auto &entry : request->entries()) {
-    std::cout << "added log entry from leader" << std::endl;
     log_.emplace_back(entry);
     log_size_++;
   }
 
-  std::cout << "append entries receive successful on client " << request->entries_size() << std::endl;
   response->set_success(true);
   return grpc::Status::OK;
 }
 grpc::Status Raft::RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request,
                                ::protos::raft::RequestVoteResponse *response) {
   std::lock_guard<std::mutex> lock_guard(*lock_);
-  std::cout << "received request vote from " << request->candidate_id() << std::endl;
 
   response->set_term(current_term_);
 
@@ -469,25 +420,18 @@ grpc::Status Raft::RequestVote(::grpc::ServerContext *context, const ::protos::r
   auto last_log_term = 0 < log_size_ - log_offset_ ? atLogIndex(last_log_index).term() : snapshot_.last_included_term();
 
   if (current_term_ < request->term()) {
-    std::cout << "entered new term " << current_term_ << " << " << request->term() << std::endl;
     current_term_ = request->term();
     role_ = FOLLOWER;
     voted_for_ = std::nullopt;
   }
 
-  std::cout << (request->term() < current_term_) << " "
-            << (voted_for_.has_value() && voted_for_.value() != request->candidate_id()) << " "
-            << (request->last_log_term() < last_log_term) << " "
-            << (request->last_log_term() == last_log_term && request->last_log_index() < last_log_index) << std::endl;
   if (request->term() < current_term_ || (voted_for_.has_value() && voted_for_.value() != request->candidate_id())
       || (request->last_log_term() < last_log_term)
       || (request->last_log_term() == last_log_term && request->last_log_index() < last_log_index)) {
     response->set_vote_granted(false);
-    std::cout << "not granted vote" << std::endl;
     return grpc::Status::OK;
   }
 
-  std::cout << "granted vote" << std::endl;
   last_heartbeat_ = std::chrono::system_clock::now();
   response->set_vote_granted(true);
   voted_for_ = request->candidate_id();
@@ -547,7 +491,6 @@ LogIndex RaftClient::startConfig(const protos::raft::Config &config) {
 
 LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
   std::shared_lock<std::shared_mutex> lock(*lock_);
-  std::cout << "doing request" << std::endl;
 
   checkForCacheExistence(lock);
   auto &[leader_id, stub] = cached_connection_info_.value();
@@ -562,22 +505,13 @@ LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
     auto deadline = last_call + StartRequestBuffer;
     client_context.set_deadline(deadline);
 
-    std::cout << "making request to " << leader_id << std::endl;
     status = stub->Start(&client_context, request, &response);
-
-
-    if (status.ok())
-      std::cout << response.data_case() << " == " << protos::raft::StartResponse::DataCase::kLeaderId
-                << " ok so leader is " << response.leader_id() << std::endl;
-    else
-      std::cout << "not ok" << std::endl;
 
     if (!status.ok()) updateCache(lock, me_);
     else if (status.ok() && response.data_case() == protos::raft::StartResponse::DataCase::kLeaderId)
       updateCache(lock, response.leader_id());
 
     if (std::chrono::system_clock::now() - time > StartRequestTimeout) {
-      std::cout << "request timeout" << std::endl;
       throw std::runtime_error("start request timeout");
     }
 
@@ -589,9 +523,7 @@ LogIndex RaftClient::doRequest(const protos::raft::StartRequest &request) {
 void RaftClient::checkForCacheExistence(std::shared_lock<std::shared_mutex> &lock) {
   if (cached_connection_info_.has_value()) return;
 
-  std::cout << "checking cache" << std::endl;
   lock.unlock();
-  std::cout << "checking cache unlock" << std::endl;
   {
     std::unique_lock<std::shared_mutex> write_lock(*lock_);
     if (cached_connection_info_.has_value()) {
@@ -611,10 +543,8 @@ void RaftClient::checkForCacheExistence(std::shared_lock<std::shared_mutex> &loc
 void RaftClient::updateCache(std::shared_lock<std::shared_mutex> &lock, const std::string &leader_id) {
   lock.unlock();
 
-  std::cout << "updating cache to " << leader_id << std::endl;
   {
     std::unique_lock<std::shared_mutex> write_lock(*lock_);
-    std::cout << "peers: " << std::endl;
     for (auto &peer : config_.peers()) std::cout << peer.id() << std::endl;
 
     if (cached_connection_info_->first == leader_id) {

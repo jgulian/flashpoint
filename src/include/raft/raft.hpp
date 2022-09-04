@@ -82,7 +82,7 @@ struct RaftPeer {
  public:
   RaftPeer(protos::raft::Peer peer, RaftConnection connection);
   const PeerId &peerId() const;
-  bool active();
+  bool active() const;
 };
 
 class Raft : public protos::raft::Raft::Service {
