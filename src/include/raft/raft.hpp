@@ -36,7 +36,7 @@ using RaftConnection = std::shared_ptr<protos::raft::Raft::StubInterface>;
 using namespace std::chrono_literals;
 
 constexpr auto ElectionTimeout = 1000ms;
-constexpr auto MinSleepTime = 300ms;
+constexpr auto MinSleepTime = 100ms;
 constexpr auto MaxSleepTime = 500ms;
 
 const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;

@@ -160,6 +160,7 @@ void Raft::updateLeaderElection() {
     if (checkAllConfigsAgreement(votes_received_)) {
       std::cout << "won election" << std::endl;
       role_ = LEADER;
+      leader_ = raft_config_->me.id();
       for (const auto &p : peers_) {
         p->match_index = 0;
         p->next_index = log_size_;
@@ -171,6 +172,13 @@ void Raft::updateLeaderElection() {
   }
 }
 void Raft::updateIndices() {
+  auto agreers = agreersForIndex(commit_index_ + 1);
+  std::cout << "updating indices to maybe " << commit_index_ + 1 << " agreers: ";
+  for (auto &agreer : agreers) std::cout << agreer << " ";
+  std::cout << std::endl;
+
+  std::cout << "check " << (commit_index_ < log_size_) << " " << commit_index_ << " " << log_size_ << " "
+            << checkAllConfigsAgreement(agreers);
   while (commit_index_ < log_size_ && checkAllConfigsAgreement(agreersForIndex(commit_index_ + 1))) commit_index_++;
 }
 

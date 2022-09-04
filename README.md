@@ -14,6 +14,7 @@ Alpha goals (Target: Oct 2)
    3. Review math (simplify prev log index)
    4. Make config me a reference to peers_ me
    5. Decide on a code style
+   6. Remove Start from grpc
 3. Support snapshots
 4. Support sharding
 5. Review TODOs
