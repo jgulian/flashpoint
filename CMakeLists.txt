@@ -46,7 +46,6 @@ find_package(Protobuf MODULE)
 set(PROTO_FILES
         protos/kv.proto
         protos/raft.proto
-        protos/log.proto
         )
 
 add_library(proto ${PROTO_FILES})

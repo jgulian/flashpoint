@@ -49,3 +49,7 @@ message Operation {
     PutOperation put = 3;
   }
 }
+
+message State {
+  map<string, bytes> data = 1;
+}

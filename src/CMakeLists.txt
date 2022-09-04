@@ -10,7 +10,6 @@ target_sources(
         raft/errors.cpp
         raft/raft.cpp
 
-        util/encoding.cpp
         util/env.cpp
         util/random.cpp
         util/logger.cpp
