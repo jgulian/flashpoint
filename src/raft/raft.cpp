@@ -162,7 +162,7 @@ void Raft::updateLeaderElection() {
       role_ = LEADER;
       leader_ = raft_config_->me.id();
       for (const auto &p : peers_) {
-        p->match_index = 0;
+        p->match_index = p->peerId() == raft_config_->me.id() ? (log_size_ - 1) : 0;
         p->next_index = log_size_;
       }
     } else if (remaining_voter_count == 0) {
@@ -410,6 +410,7 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
 
   response->set_term(current_term_);
   if (request->term() < current_term_) {
+    response->set_leader_id(leader_);
     response->set_success(true);
     return grpc::Status::OK;
   } else if (current_term_ < request->term()) {
