@@ -4,3 +4,4 @@ raft_config:
   server1: "localhost:3309"
   server2: "localhost:3311"
   server3: "localhost:3313"
+snapshot_file: "snapshot1.state"

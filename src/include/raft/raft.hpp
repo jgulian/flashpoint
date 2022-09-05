@@ -50,9 +50,8 @@ struct RaftConfig {
   std::function<void(protos::raft::LogEntry log_entry)> apply_config_update = [](const protos::raft::LogEntry &) {};
   protos::raft::Config starting_config = {};
   std::function<void(std::string)> save_state = [](const std::string &) {};
-  std::string snapshot_file;
   std::shared_ptr<util::Random> random = std::make_shared<util::MTRandom>();
-  std::optional<std::string> persistent_file = std::nullopt;
+  std::optional<std::string> snapshot_file = std::nullopt;
   std::function<void(unsigned long long bytes_written)> on_persist = [](unsigned long long _) {};
 };
 

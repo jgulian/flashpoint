@@ -25,6 +25,15 @@ Raft::Raft(std::unique_ptr<RaftConfig> config, const protos::raft::RaftState &sa
   raft_state_->set_log_size(1);
   raft_state_->set_current_term(0);
   raft_state_->clear_voted_for();
+
+  for (auto &peer : raft_config_->starting_config.peers()) {
+    auto new_peer = raft_state_->mutable_peers()->Add();
+    new_peer->mutable_peer()->CopyFrom(peer);
+    new_peer->set_next_index(1);
+    new_peer->set_match_index(0);
+    new_peer->set_snapshot_id(0);
+    new_peer->set_chunk_offset(0);
+  }
 }
 
 bool Raft::run() {
@@ -154,7 +163,7 @@ void Raft::updateLeaderElection() {
       role_ = LEADER;
       leader_ = raft_config_->me.id();
       for (auto &peer : *raft_state_->mutable_peers()) {
-        peer.set_match_index(peer.peer().id() == raft_config_->me.id() ? (raft_state_->log_size() - 1) : 1);
+        peer.set_match_index(peer.peer().id() == raft_config_->me.id() ? (raft_state_->log_size() - 1) : 0);
         peer.set_next_index(raft_state_->log_size());
       }
     } else if (remaining_voter_count == 0) {
@@ -344,17 +353,17 @@ void Raft::fillWithChunk(protos::raft::InstallSnapshotRequest &request) {
 }
 void Raft::registerNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config) {
   for (auto &config_peer : config.peers()) {
-    try {
+    if (extended_peers_->contains(config_peer.id())) {
       auto &peer = extended_peers_->at(config_peer.id());
       if (!base_config && config_peer.voting()) peer->active_in_configs.emplace_back(log_index);
       if (base_config && config_peer.voting()) peer->active_in_base_config = true;
-    } catch (const std::runtime_error &) {
+    } else {
       auto channel = grpc::CreateChannel(config_peer.data().address(), grpc::InsecureChannelCredentials());
       auto stub = protos::raft::Raft::NewStub(channel);
       auto peer = std::make_unique<ExtendedRaftPeer>(std::move(stub));
       if (!base_config && config_peer.voting()) peer->active_in_configs.emplace_back(log_index);
       if (base_config && config_peer.voting()) peer->active_in_base_config = true;
-      extended_peers_->at(config_peer.id()) = std::move(peer);
+      extended_peers_->emplace(config_peer.id(), std::move(peer));
     }
   }
 
@@ -487,10 +496,10 @@ grpc::Status Raft::InstallSnapshot(::grpc::ServerContext *context,
 }
 
 void Raft::persist() {
-  if (!raft_config_->persistent_file.has_value()) return;
+  if (!raft_config_->snapshot_file.has_value()) return;
 
   std::ofstream persistent_file = {};
-  persistent_file.open(raft_config_->persistent_file.value());
+  persistent_file.open(raft_config_->snapshot_file.value());
   raft_state_->SerializeToOstream(&persistent_file);
   auto written_count = persistent_file.tellp();
   persistent_file.close();
@@ -575,7 +584,6 @@ void RaftClient::updateCache(std::shared_lock<std::shared_mutex> &lock, const st
 
   {
     std::unique_lock<std::shared_mutex> write_lock(*lock_);
-    for (auto &peer : config_.peers()) std::cout << peer.id() << std::endl;
 
     if (cached_connection_info_->first == leader_id) {
       write_lock.unlock();

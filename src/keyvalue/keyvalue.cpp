@@ -55,6 +55,12 @@ KeyValueService::KeyValueService(const std::string &config_file) {
     raft_client_->updateConfig(std::forward<protos::raft::Config>(config));
   };
 
+  if (config["snapshot_file"]) {
+    std::cout << "using snapshot file" << std::endl;
+    raft_config->snapshot_file = config["snapshot_file"].as<std::string>();
+    raft_config->on_persist = [](auto persist_size) { std::cout << "persisted: " << persist_size << std::endl; };
+  }
+
   raft_server_ = std::make_unique<raft::Raft>(std::move(raft_config));
   raft_client_ = std::make_unique<raft::RaftClient>(me.id(), starting_config);
   key_value_server_ = std::make_unique<KeyValueServer>(*this);
