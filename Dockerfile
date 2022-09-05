@@ -17,20 +17,15 @@ ADD src ./src
 ADD test ./test
 ADD CMakeLists.txt .
 
-# TODO: make work
 # TODO: use ninja
 RUN cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=make -B cmake-build-release .
 RUN cmake --build cmake-build-release --target flashpoint -j 12
 RUN cmake --build cmake-build-release --target flashpoint_test -j 12
 
 WORKDIR /build
-RUN mv /service/cmake-build-release/CMake-flashpoint .
-E
-
-FROM flashpoint-base as flashpoint
-RUN ls; echo; ls cmake-build-release
-ENTRYPOINT ./CMakeFiles/flashpoint
-
+RUN ls /service/cmake-build-release
+RUN mv /service/cmake-build-release/CMakeFiles/flashpoint .
+ENTRYPOINT ./flashpoint
 
 FROM flashpoint-base as flashpoint-test
 ENTRYPOINT ./CmakeFiles/flashpoint_test

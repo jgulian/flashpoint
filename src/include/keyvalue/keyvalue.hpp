@@ -39,6 +39,9 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
 				   ::protos::kv::Operation *response) override;
   grpc::Status Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
 				   ::protos::kv::Operation *response) override;
+  grpc::Status Cas(::grpc::ServerContext *context,
+				   const ::protos::kv::CasArgs *request,
+				   ::protos::kv::Operation *response) override;
 };
 
 class KeyValueService {
@@ -67,8 +70,9 @@ class KeyValueService {
   bool update();
   void kill();
 
-  OperationResult put(const std::string &key, const std::string &value);
-  OperationResult get(const std::string &key);
+  OperationResult Put(const std::string &key, const std::string &value);
+  OperationResult Get(const std::string &key);
+  OperationResult Cas(const std::string &key, const std::string &expected, const std::string &updated);
 
  private:
   OperationResult start(Operation &operation);

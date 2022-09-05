@@ -267,10 +267,6 @@ void Raft::updateFollower(const protos::raft::RaftState_PeerState &peer,
   grpc::ClientContext client_context = {};
   grpc::Status status;
 
-  std::cout << "which update should " << peer.peer().id() << " "
-			<< (peer.snapshot_id() != raft_state_->snapshot().snapshot_id()) << " cuz " << peer.snapshot_id() << " != "
-			<< raft_state_->snapshot().snapshot_id() << " or " << peer.chunk_offset() << " != "
-			<< raft_state_->snapshot().chunk_count() << std::endl;
   if (peer.snapshot_id() != raft_state_->snapshot().snapshot_id()
 	  || peer.chunk_offset() != raft_state_->snapshot().chunk_count()) {
 	auto call = std::make_shared<
@@ -533,7 +529,6 @@ grpc::Status Raft::InstallSnapshot(::grpc::ServerContext *context,
 								   const ::protos::raft::InstallSnapshotRequest *request,
 								   ::protos::raft::InstallSnapshotResponse *response) {
   std::lock_guard<std::mutex> lock_guard(*lock_);
-  std::cout << "started install snapshot" << std::endl;
 
   response->set_term(raft_state_->current_term());
 
@@ -557,8 +552,6 @@ grpc::Status Raft::InstallSnapshot(::grpc::ServerContext *context,
   std::ofstream temp_file(temp_file_name);
   temp_file.seekp(static_cast<long long>(request->chunk_offset() * SnapshotChunkSize));
   temp_file << request->chunk();
-
-  std::cout << "is last chunk " << request->last_chunk() << std::endl;
 
   if (request->last_chunk()) {
 	std::ifstream temp_file_read(temp_file_name);

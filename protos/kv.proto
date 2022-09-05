@@ -5,6 +5,7 @@ package protos.kv;
 service KeyValueApi {
   rpc Get (GetArgs) returns (Operation) {}
   rpc Put (PutArgs) returns (Operation) {}
+  rpc Cas (CasArgs) returns (Operation) {}
 }
 
 enum Code {
@@ -39,12 +40,12 @@ message PutOperation {
 
 message CasArgs {
   string key = 1;
-  bytes expected_value = 2;
-  bytes actual_value = 3;
+  bytes expected = 2;
+  bytes updated = 3;
 }
 
 message CasReply {
-  optional bytes actual_value = 3;
+  optional bytes actual = 3;
 }
 
 message CasOperation {

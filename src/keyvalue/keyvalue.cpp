@@ -6,14 +6,23 @@ KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
 
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
 								 ::protos::kv::Operation *response) {
-  auto operation_future = service_.get(request->key())->get_future();
+  auto operation_future = service_.Get(request->key())->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
   return grpc::Status::OK;
 }
 grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
 								 ::protos::kv::Operation *response) {
-  auto operation = service_.put(request->key(), request->value());
+  auto operation = service_.Put(request->key(), request->value());
+  auto operation_future = operation->get_future();
+  operation_future.wait();
+  response->CopyFrom(operation_future.get());
+  return grpc::Status::OK;
+}
+grpc::Status KeyValueServer::Cas(::grpc::ServerContext *context,
+								 const ::protos::kv::CasArgs *request,
+								 ::protos::kv::Operation *response) {
+  auto operation = service_.Cas(request->key(), request->expected(), request->updated());
   auto operation_future = operation->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
@@ -93,9 +102,6 @@ bool KeyValueService::update() {
 	auto recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
 	bool needs_snapshot = false;
 	while (recent_persist.has_value()) {
-	  util::GetLogger()->log("recent persist %u < %u",
-							 raft_settings_->persistence_settings->persistence_threshold,
-							 recent_persist.value());
 	  needs_snapshot |= raft_settings_->persistence_settings->persistence_threshold < recent_persist.value();
 	  recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
 	}
@@ -107,16 +113,24 @@ bool KeyValueService::update() {
 }
 void KeyValueService::kill() {}
 
-KeyValueService::OperationResult KeyValueService::put(const std::string &key, const std::string &value) {
+KeyValueService::OperationResult KeyValueService::Put(const std::string &key, const std::string &value) {
   auto op = Operation();
   op.mutable_put()->mutable_args()->set_key(key);
   op.mutable_put()->mutable_args()->set_value(value);
   return start(op);
 }
-
-KeyValueService::OperationResult KeyValueService::get(const std::string &key) {
+KeyValueService::OperationResult KeyValueService::Get(const std::string &key) {
   auto op = Operation();
   op.mutable_get()->mutable_args()->set_key(key);
+  return start(op);
+}
+KeyValueService::OperationResult KeyValueService::Cas(const std::string &key,
+													  const std::string &expected,
+													  const std::string &updated) {
+  auto op = Operation();
+  op.mutable_cas()->mutable_args()->set_key(key);
+  op.mutable_cas()->mutable_args()->set_expected(expected);
+  op.mutable_cas()->mutable_args()->set_updated(updated);
   return start(op);
 }
 
@@ -132,13 +146,13 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
 
   switch (operation.data_case()) {
 	case Operation::kGet: {
-	  auto &key = operation.get().args().key();
-	  if (key.empty() || !key_value_state_.data().contains(key)) {
+	  auto &kKey = operation.get().args().key();
+	  if (kKey.empty() || !key_value_state_.data().contains(kKey)) {
 		operation.mutable_status()->set_code(protos::kv::KeyNotFound);
-		operation.mutable_status()->set_info(key + " not found");
+		operation.mutable_status()->set_info(kKey + " not found");
 		break;
 	  }
-	  operation.mutable_get()->mutable_reply()->set_value(key_value_state_.data().at(key));
+	  operation.mutable_get()->mutable_reply()->set_value(key_value_state_.data().at(kKey));
 	  operation.mutable_status()->set_code(protos::kv::Ok);
 	  break;
 	}
@@ -156,6 +170,30 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
 	  operation.mutable_status()->set_info("operation data not set");
 	  break;
 	}
+	case Operation::kCas: {
+	  auto &kKey = operation.cas().args().key();
+	  if (kKey.empty()) {
+		operation.mutable_status()->set_code(protos::kv::InvalidOperation);
+		operation.mutable_status()->set_info("key is empty");
+		break;
+	  }
+	  if (!key_value_state_.data().contains(kKey)) {
+		operation.mutable_status()->set_code(protos::kv::KeyNotFound);
+		operation.mutable_status()->set_info(kKey + " not found");
+		break;
+	  }
+	  auto &kActual = key_value_state_.data().at(kKey);
+	  auto &kExpected = operation.cas().args().expected();
+	  operation.mutable_cas()->mutable_reply()->set_actual(kActual);
+
+	  if (kActual == kExpected) {
+		key_value_state_.mutable_data()->at(kKey) = operation.cas().args().updated();
+		operation.mutable_status()->set_code(protos::kv::Ok);
+	  } else {
+		operation.mutable_status()->set_code(protos::kv::UnexpectedValue);
+		operation.mutable_status()->set_info("expected: " + kExpected + "\nactual: " + kActual);
+	  }
+	}
   }
 
   {
@@ -170,7 +208,6 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
 }
 
 bool KeyValueService::UpdateSnapshot() {
-  util::GetLogger()->msg(util::LogLevel::DEBUG, "Starting snapshot");
   if (!raft_settings_->persistence_settings.has_value())
 	throw std::runtime_error("can't update snapshot when snapshots are not enabled");
 
@@ -178,23 +215,19 @@ bool KeyValueService::UpdateSnapshot() {
   // TODO: use lock
   if (std::filesystem::exists(temp_file_name))
 	return false;
-  util::GetLogger()->msg(util::LogLevel::DEBUG, "No previous snapshot");
 
   //TODO: this file stuff should probably be moved into raft since InstallSnapshot is in raft and does the same things.
   std::ofstream temp_file(temp_file_name);
   key_value_state_.SerializeToOstream(&temp_file);
   temp_file.close();
 
-  util::GetLogger()->msg(util::LogLevel::DEBUG, "here1");
-
   std::ifstream temp_file_read(temp_file_name);
   std::ofstream real_file(raft_settings_->persistence_settings->snapshot_file);
   real_file << temp_file_read.rdbuf();
   std::remove(temp_file_name.c_str());
 
-  util::GetLogger()->msg(util::LogLevel::DEBUG, "here2");
-
-  util::GetLogger()->log("starting a new snapshot");
+  util::GetLogger()->log("starting new snapshot");
   return raft_server_->snapshot(last_included_index_);
 }
+
 }// namespace flashpoint::keyvalue

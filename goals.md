@@ -19,18 +19,19 @@ Alpha goals (Target: Oct 2)
 3. Tune election timing parameters
 4. ~~Support Log Compaction: persistence & snapshots~~
    1. Load from persistent state
-   2. Clean out previous snapshot
+   2. Make sure temp snapshot is temp
+   3. Add locking to snapshot
 5. Support sharding
 6. Review TODOs
 7. Use environment variables for things like logging color and log level
 
 Official Release goals (Target: Dec 22)
 
-* increase warnings and generally clean up code
-   *
+* increase defense programming and generally clean up code
 * write tests
-* add clang support
+* move to clang
 * start config on leader cmd
 * allow users to create (yaml) config file for plugins and server
 * use ASan in tests
 * Aries
+* Log to file by default
