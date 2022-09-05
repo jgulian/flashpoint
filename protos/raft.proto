@@ -131,6 +131,5 @@ message RaftState {
   uint32 current_term = 6;
 
   optional string voted_for = 7;
-  string me = 8;
-
+  Snapshot snapshot = 8;
 }

@@ -1,8 +1,3 @@
-Pre-release alpha goals (Target: Sep 4)
-
-1. Get core service working
-    1. Get general 3 participant replication work
-
 Alpha goals (Target: Oct 2)
 
 1. Make keyvalue callback based
@@ -12,7 +7,6 @@ Alpha goals (Target: Oct 2)
     3. Review math (simplify prev log index)
     4. Make config me a reference to peers_ me
     5. Decide on a code style
-    6. Remove Start from grpc
 3. Tune election timing parameters
 4. Support persistence & snapshots
 5. Support sharding

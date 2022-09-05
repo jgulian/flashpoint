@@ -51,10 +51,12 @@ struct RaftConfig {
   protos::raft::Config starting_config = {};
   std::function<void(std::string)> save_state = [](const std::string &) {};
   std::string snapshot_file;
-  std::shared_ptr<util::Random> random_ = std::make_shared<util::MTRandom>();
+  std::shared_ptr<util::Random> random = std::make_shared<util::MTRandom>();
+  std::optional<std::string> persistent_file = std::nullopt;
+  std::function<void(unsigned long long bytes_written)> on_persist = [](unsigned long long _) {};
 };
 
-struct RaftPeer {
+struct ExtendedRaftPeer {
   template<class Request, class Response>
   struct Call {
     grpc::ClientContext client_context = {};
@@ -70,9 +72,6 @@ struct RaftPeer {
       std::shared_ptr<Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse>>;
   using RequestVoteCall = std::shared_ptr<Call<protos::raft::RequestVoteRequest, protos::raft::RequestVoteResponse>>;
 
-  protos::raft::Peer peer = {};
-  LogIndex match_index = 0, next_index = 1;
-  SnapshotId snapshot_id = 0, chunk_offset = 0;
   RaftConnection connection = nullptr;
   bool active_in_base_config = false;
   std::list<LogIndex> active_in_configs = {};
@@ -80,9 +79,8 @@ struct RaftPeer {
   std::variant<std::monostate, AppendEntriesCall, InstallSnapshotCall, RequestVoteCall> last_call = {};
 
  public:
-  RaftPeer(protos::raft::Peer peer, RaftConnection connection);
-  const PeerId &peerId() const;
-  bool active() const;
+  ExtendedRaftPeer(std::shared_ptr<protos::raft::Raft::StubInterface> connection);
+  [[nodiscard]] bool active() const;
 };
 
 class Raft : public protos::raft::Raft::Service {
@@ -97,17 +95,9 @@ class Raft : public protos::raft::Raft::Service {
   std::unique_ptr<std::atomic<bool>> running_ = std::make_unique<std::atomic<bool>>(false);
   std::unique_ptr<std::mutex> lock_ = std::make_unique<std::mutex>();
   std::unique_ptr<RaftConfig> raft_config_ = {};
-
-  // Persistant
-  std::list<std::unique_ptr<RaftPeer>> peers_;
-  //TODO: move to unique pointer of protos::raft::RaftState
-  std::vector<protos::raft::LogEntry> log_ = {};
-  protos::raft::Config base_config_ = {};
-  std::list<LogIndex> proposed_configs_ = {};
-  LogIndex log_offset_ = 1, log_size_ = 1;
-  LogTerm current_term_ = 0;
-  std::optional<PeerId> voted_for_ = std::nullopt;
-  protos::raft::Snapshot snapshot_ = {};
+  std::unique_ptr<protos::raft::RaftState> raft_state_ = std::make_unique<protos::raft::RaftState>();
+  std::unique_ptr<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>> extended_peers_ =
+      std::make_unique<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>>();
 
   // Volatile
   LogIndex commit_index_ = 0, last_applied_ = 0;
@@ -116,6 +106,7 @@ class Raft : public protos::raft::Raft::Service {
   PeerId leader_;
   bool sent_vote_requests_ = true;
   std::list<PeerId> votes_received_ = {};
+  std::list<LogIndex> proposed_configs_ = {};
 
 
  public:
@@ -127,8 +118,6 @@ class Raft : public protos::raft::Raft::Service {
 
   bool snapshot(LogIndex included_index, std::string snapshot_file);
 
-  void persist();
-
  private:
   void worker();
 
@@ -138,19 +127,18 @@ class Raft : public protos::raft::Raft::Service {
 
   void updateFollowers();
 
-  void updateFollower(const std::unique_ptr<RaftPeer> &peer);
+  void updateFollower(const protos::raft::RaftState_PeerState &peer,
+                      const std::unique_ptr<ExtendedRaftPeer> &extended_peer);
 
-  const protos::raft::LogEntry &atLogIndex(LogIndex index);
+  const protos::raft::LogEntry &atLogIndex(LogIndex index) const;
 
   void commitEntries();
 
-  bool checkAllConfigsAgreement(const std::list<PeerId> &agreers);
+  [[nodiscard]] bool checkAllConfigsAgreement(const std::list<PeerId> &agreers) const;
 
-  std::list<PeerId> agreersForIndex(LogIndex index);
+  [[nodiscard]] std::list<PeerId> agreersForIndex(LogIndex index) const;
 
   void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
-
-  RaftPeer &getPeer(const PeerId &peer_id);
 
   void registerNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config = false);
 
@@ -162,6 +150,8 @@ class Raft : public protos::raft::Raft::Service {
                            ::protos::raft::RequestVoteResponse *response) override;
   grpc::Status InstallSnapshot(::grpc::ServerContext *context, const ::protos::raft::InstallSnapshotRequest *request,
                                ::protos::raft::InstallSnapshotResponse *response) override;
+
+  void persist();
 };
 
 class RaftClient {
