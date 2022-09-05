@@ -15,7 +15,6 @@
 
 #include "raft/raft.hpp"
 
-
 namespace flashpoint::keyvalue {
 using Operation = protos::kv::Operation;
 using Status = protos::kv::Status;
@@ -37,21 +36,22 @@ class KeyValueServer final : public protos::kv::KeyValueApi::Service {
   ~KeyValueServer() override = default;
 
   grpc::Status Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
-                   ::protos::kv::Operation *response) override;
+				   ::protos::kv::Operation *response) override;
   grpc::Status Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
-                   ::protos::kv::Operation *response) override;
+				   ::protos::kv::Operation *response) override;
 };
 
 class KeyValueService {
   using OperationResult = std::shared_ptr<std::promise<Operation>>;
 
  private:
-  std::unordered_map<std::string, std::string> data_;
+  protos::kv::KeyValueState key_value_state_;
   std::map<raft::LogIndex, OperationResult> ongoing_transactions_;
+  raft::LogIndex last_included_index_;
 
   std::unique_ptr<raft::Raft> raft_server_;
   std::unique_ptr<raft::RaftClient> raft_client_;
-  RaftConfig raft_config_ = {};
+  std::shared_ptr<raft::RaftSettings> raft_settings_;
 
   std::unique_ptr<KeyValueServer> key_value_server_;
 
@@ -61,17 +61,20 @@ class KeyValueService {
   std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
 
  public:
-  KeyValueService(const std::string &config_file);
+  explicit KeyValueService(const std::string &config_file);
 
   void run();
   bool update();
   void kill();
 
+  OperationResult put(const std::string &key, const std::string &value);
+  OperationResult get(const std::string &key);
+
+ private:
   OperationResult start(Operation &operation);
   void finish(const protos::raft::LogEntry &entry);
 
-  OperationResult put(const std::string &key, const std::string &value);
-  OperationResult get(const std::string &key);
+  void updateSnapshot();
 };
 
 }// namespace flashpoint::keyvalue

@@ -1,8 +1,8 @@
 Goals for today (Sep 5)
 
-* Snapshots
 * CAS
 * Dockerfile
+* Update variable names
 * Maybe callback KV
 
 Alpha goals (Target: Oct 2)
@@ -13,10 +13,12 @@ Alpha goals (Target: Oct 2)
    2. Enhance naming (raft config -> raft settings)
    3. Review math (simplify prev log index)
    4. Make config me a reference to peers_ me
-   5. Decide on a code style
+   5. ~~Decide on a code style~~
+      1. Update variable names
    6. make leaders/followers defensive (throw exception if leader_id() is wrong in AE/IS)
 3. Tune election timing parameters
-4. Support persistence & snapshots
+4. ~~Support Log Compaction: persistence & snapshots~~
+   1. Load from persistent state
 5. Support sharding
 6. Review TODOs
 

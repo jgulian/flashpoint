@@ -108,7 +108,6 @@ message Snapshot {
   uint64 last_included_index = 2;
   uint32 last_included_term = 3;
 
-  string file = 4;
   uint64 file_size = 5;
   uint32 chunk_count = 6;
 }

@@ -104,7 +104,7 @@ void putCmd(CLI::App &put, const PutCommandArgs &command_args) {
   }
 }
 void startCmd(CLI::App &start, const StartCommandArgs &command_args) {
-  keyvalue::KeyValueService service = {command_args.config_file};
+  keyvalue::KeyValueService service(command_args.config_file);
   service.run();
   std::cout << "starting server" << std::endl;
   while (service.update()) util::logger->worker();

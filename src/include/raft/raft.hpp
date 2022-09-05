@@ -18,6 +18,7 @@
 #include <utility>
 #include <variant>
 
+#include "util/concurrent_queue.hpp"
 #include "util/logger.hpp"
 #include "util/random.hpp"
 
@@ -44,15 +45,20 @@ const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;
 constexpr auto StartRequestBuffer = 100ms;
 constexpr auto StartRequestTimeout = 1000ms;
 
-struct RaftConfig {
+struct PersistenceSettings {
+  std::string snapshot_file;
+  std::string persistent_file;
+  util::ConcurrentQueue<unsigned long long> recent_persists = {};
+  unsigned long long persistence_threshold;
+};
+
+struct RaftSettings {
   protos::raft::Peer me;
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
   std::function<void(protos::raft::LogEntry log_entry)> apply_config_update = [](const protos::raft::LogEntry &) {};
   protos::raft::Config starting_config = {};
-  std::function<void(std::string)> save_state = [](const std::string &) {};
   std::shared_ptr<util::Random> random = std::make_shared<util::MTRandom>();
-  std::optional<std::string> snapshot_file = std::nullopt;
-  std::function<void(unsigned long long bytes_written)> on_persist = [](unsigned long long _) {};
+  std::optional<PersistenceSettings> persistence_settings = std::nullopt;
 };
 
 struct ExtendedRaftPeer {
@@ -78,27 +84,28 @@ struct ExtendedRaftPeer {
   std::variant<std::monostate, AppendEntriesCall, InstallSnapshotCall, RequestVoteCall> last_call = {};
 
  public:
-  ExtendedRaftPeer(std::shared_ptr<protos::raft::Raft::StubInterface> connection);
+  explicit ExtendedRaftPeer(std::shared_ptr<protos::raft::Raft::StubInterface> connection);
   [[nodiscard]] bool active() const;
 };
 
 class Raft : public protos::raft::Raft::Service {
  private:
   enum RaftRole {
-    LEADER,
-    FOLLOWER,
-    CANDIDATE,
+	LEADER,
+	FOLLOWER,
+	CANDIDATE,
   };
 
   std::unique_ptr<std::thread> worker_function_ = nullptr;
   std::unique_ptr<std::atomic<bool>> running_ = std::make_unique<std::atomic<bool>>(false);
   std::unique_ptr<std::mutex> lock_ = std::make_unique<std::mutex>();
-  std::unique_ptr<RaftConfig> raft_config_ = {};
+
+  std::shared_ptr<RaftSettings> settings_ = {};
   std::unique_ptr<protos::raft::RaftState> raft_state_ = std::make_unique<protos::raft::RaftState>();
   std::unique_ptr<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>> extended_peers_ =
-      std::make_unique<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>>();
+	  std::make_unique<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>>();
 
-  // Volatile
+  // Volatile State
   LogIndex commit_index_ = 0, last_applied_ = 0;
   RaftTime last_heartbeat_ = std::chrono::system_clock::now();
   RaftRole role_ = FOLLOWER;
@@ -109,13 +116,13 @@ class Raft : public protos::raft::Raft::Service {
 
 
  public:
-  explicit Raft(std::unique_ptr<RaftConfig> config, const protos::raft::RaftState &save_state = {});
+  explicit Raft(std::shared_ptr<RaftSettings> config, bool use_persisted_state = false);
 
   bool run();
 
   bool kill();
 
-  bool snapshot(LogIndex included_index, std::string snapshot_file);
+  bool snapshot(LogIndex included_index);
 
  private:
   void worker();
@@ -129,7 +136,7 @@ class Raft : public protos::raft::Raft::Service {
   void updateFollower(const protos::raft::RaftState_PeerState &peer,
                       const std::unique_ptr<ExtendedRaftPeer> &extended_peer);
 
-  const protos::raft::LogEntry &atLogIndex(LogIndex index) const;
+  [[nodiscard]] const protos::raft::LogEntry &atLogIndex(LogIndex index) const;
 
   void commitEntries();
 

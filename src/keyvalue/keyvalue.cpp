@@ -2,18 +2,17 @@
 
 namespace flashpoint::keyvalue {
 
-
 KeyValueServer::KeyValueServer(KeyValueService &service) : service_(service) {}
 
 grpc::Status KeyValueServer::Get(::grpc::ServerContext *context, const ::protos::kv::GetArgs *request,
-                                 ::protos::kv::Operation *response) {
+								 ::protos::kv::Operation *response) {
   auto operation_future = service_.get(request->key())->get_future();
   operation_future.wait();
   response->CopyFrom(operation_future.get());
   return grpc::Status::OK;
 }
 grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos::kv::PutArgs *request,
-                                 ::protos::kv::Operation *response) {
+								 ::protos::kv::Operation *response) {
   auto operation = service_.put(request->key(), request->value());
   auto operation_future = operation->get_future();
   operation_future.wait();
@@ -24,110 +23,85 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
 KeyValueService::KeyValueService(const std::string &config_file) {
   auto config = YAML::LoadFile(config_file);
   if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"] || !config["host_address"])
-    throw std::runtime_error("config file not formatted correctly.");
+	throw std::runtime_error("config file not formatted correctly.");
 
   protos::raft::Config starting_config = {};
   protos::raft::Peer me = {};
   auto peers = config["raft_config"];
   for (YAML::const_iterator it = peers.begin(); it != peers.end(); ++it) {
-    auto id = it->first.as<std::string>();
-    for (auto &peer : starting_config.peers())
-      if (peer.id() == id) throw std::runtime_error("peers must have different ids");
+	auto id = it->first.as<std::string>();
+	for (auto &peer : starting_config.peers())
+	  if (peer.id() == id)
+		throw std::runtime_error("peers must have different ids");
 
-    auto peer = starting_config.mutable_peers()->Add();
-    peer->set_id(id);
-    peer->set_voting(true);
-    peer->mutable_data()->set_address(it->second.as<std::string>());
-    // TODO: Update for other connection options.
+	auto peer = starting_config.mutable_peers()->Add();
+	peer->set_id(id);
+	peer->set_voting(true);
+	peer->mutable_data()->set_address(it->second.as<std::string>());
+	// TODO: Update for other connection options.
 
-    if (id == config["me"].as<std::string>()) me.CopyFrom(*peer);
+	if (id == config["me"].as<std::string>())
+	  me.CopyFrom(*peer);
   }
 
-  if (me.id() != config["me"].as<std::string>()) throw std::runtime_error("me must be an id used in the config");
+  if (me.id() != config["me"].as<std::string>())
+	throw std::runtime_error("me must be an id used in the config");
 
-  auto raft_config = std::make_unique<raft::RaftConfig>();
-  raft_config->me = me;
-  raft_config->starting_config = starting_config;
-  raft_config->apply_command = [this](auto &&entry) { finish(std::forward<decltype(entry)>(entry)); };
-  raft_config->apply_config_update = [this](auto &&entry) {
-    auto config = protos::raft::Config();
-    config.ParseFromString(entry.log_data().data());
-    raft_client_->updateConfig(std::forward<protos::raft::Config>(config));
+  raft_settings_ = std::make_shared<raft::RaftSettings>();
+  raft_settings_->me = me;
+  raft_settings_->starting_config = starting_config;
+  raft_settings_->apply_command = [this](auto &&entry) { finish(std::forward<decltype(entry)>(entry)); };
+  raft_settings_->apply_config_update = [this](auto &&entry) {
+	auto config = protos::raft::Config();
+	config.ParseFromString(entry.log_data().data());
+	raft_client_->updateConfig(std::forward<protos::raft::Config>(config));
   };
 
-  if (config["snapshot_file"]) {
-    std::cout << "using snapshot file" << std::endl;
-    raft_config->snapshot_file = config["snapshot_file"].as<std::string>();
-    raft_config->on_persist = [](auto persist_size) { std::cout << "persisted: " << persist_size << std::endl; };
+  if (auto persistence_config = config["persistence"]) {
+	if (!persistence_config["persistent_file"] || !persistence_config["persist_threshold"]
+		|| !persistence_config["snapshot_file"])
+	  throw std::runtime_error("config file not formatted correctly.");
+
+	std::cout << "persistence enabled" << std::endl;
+	raft_settings_->persistence_settings.value().snapshot_file = persistence_config["snapshot_file"].as<std::string>();
+	raft_settings_->persistence_settings.value().persistent_file =
+		persistence_config["persistent_file"].as<std::string>();
+	raft_settings_->persistence_settings->persistence_threshold =
+		persistence_config["persist_threshold"].as<unsigned long long>();
   }
 
-  raft_server_ = std::make_unique<raft::Raft>(std::move(raft_config));
+  raft_server_ = std::make_unique<raft::Raft>(raft_settings_);
   raft_client_ = std::make_unique<raft::RaftClient>(me.id(), starting_config);
   key_value_server_ = std::make_unique<KeyValueServer>(*this);
 
-  auto &raft_host_address = me.data().address();
-  auto kv_host_address = config["host_address"].as<std::string>();
+  auto &kRaftHostAddress = me.data().address();
+  const auto kKvHostAddress = config["host_address"].as<std::string>();
 
-  grpc_server_builder_.AddListeningPort(kv_host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder_.AddListeningPort(raft_host_address, grpc::InsecureServerCredentials());
-  grpc_server_builder_.RegisterService(kv_host_address, key_value_server_.get());
-  grpc_server_builder_.RegisterService(raft_host_address, raft_server_.get());
+  grpc_server_builder_.AddListeningPort(kKvHostAddress, grpc::InsecureServerCredentials());
+  grpc_server_builder_.AddListeningPort(kRaftHostAddress, grpc::InsecureServerCredentials());
+  grpc_server_builder_.RegisterService(kKvHostAddress, key_value_server_.get());
+  grpc_server_builder_.RegisterService(kRaftHostAddress, raft_server_.get());
 }
 
 void KeyValueService::run() {
   grpc_server_ = grpc_server_builder_.BuildAndStart();
-  while (!raft_server_->run())
-    ;
+  while (!raft_server_->run());
 }
-bool KeyValueService::update() { return true; }
+bool KeyValueService::update() {
+  if (raft_settings_->persistence_settings.has_value()) {
+	auto recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
+	bool needs_snapshot = false;
+	while (recent_persist.has_value()) {
+	  needs_snapshot |= raft_settings_->persistence_settings->persistence_threshold < recent_persist.value();
+	  recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
+	}
+
+	if (needs_snapshot)
+	  updateSnapshot();
+  }
+  return true;
+}
 void KeyValueService::kill() {}
-
-KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
-  auto log_index = raft_client_->start(operation.SerializeAsString());
-  auto operation_result = std::make_shared<std::promise<Operation>>();
-  ongoing_transactions_[log_index] = operation_result;
-  return operation_result;
-}
-void KeyValueService::finish(const protos::raft::LogEntry &entry) {
-  Operation operation = {};
-  operation.ParseFromString(entry.log_data().data());
-
-  switch (operation.data_case()) {
-    case Operation::kGet: {
-      auto &key = operation.get().args().key();
-      if (key.empty() || !data_.contains(key)) {
-        operation.mutable_status()->set_code(protos::kv::KeyNotFound);
-        operation.mutable_status()->set_info(key + " not found");
-        break;
-      }
-      operation.mutable_get()->mutable_reply()->set_value(data_.at(key));
-      operation.mutable_status()->set_code(protos::kv::Ok);
-      break;
-    }
-    case Operation::kPut:
-      if (operation.put().args().key().empty()) {
-        operation.mutable_status()->set_code(protos::kv::InvalidOperation);
-        operation.mutable_status()->set_info("key is empty");
-        break;
-      }
-      data_[operation.put().args().key()] = operation.put().args().value();
-      operation.mutable_status()->set_code(protos::kv::Ok);
-      break;
-    case Operation::DATA_NOT_SET:
-      operation.mutable_status()->set_code(protos::kv::InvalidOperation);
-      operation.mutable_status()->set_info("operation data not set");
-      break;
-  }
-
-  {
-    std::unique_lock lock(*lock_);
-    if (ongoing_transactions_.contains(entry.index())) {
-      auto operation_result = ongoing_transactions_[entry.index()];
-      operation_result->set_value(operation);
-      ongoing_transactions_.erase(entry.index());
-    }
-  }
-}
 
 KeyValueService::OperationResult KeyValueService::put(const std::string &key, const std::string &value) {
   auto op = Operation();
@@ -140,5 +114,72 @@ KeyValueService::OperationResult KeyValueService::get(const std::string &key) {
   auto op = Operation();
   op.mutable_get()->mutable_args()->set_key(key);
   return start(op);
+}
+
+KeyValueService::OperationResult KeyValueService::start(Operation &operation) {
+  auto log_index = raft_client_->start(operation.SerializeAsString());
+  auto operation_result = std::make_shared<std::promise<Operation>>();
+  ongoing_transactions_[log_index] = operation_result;
+  return operation_result;
+}
+void KeyValueService::finish(const protos::raft::LogEntry &entry) {
+  Operation operation = {};
+  operation.ParseFromString(entry.log_data().data());
+
+  switch (operation.data_case()) {
+	case Operation::kGet: {
+	  auto &key = operation.get().args().key();
+	  if (key.empty() || !key_value_state_.data().contains(key)) {
+		operation.mutable_status()->set_code(protos::kv::KeyNotFound);
+		operation.mutable_status()->set_info(key + " not found");
+		break;
+	  }
+	  operation.mutable_get()->mutable_reply()->set_value(key_value_state_.data().at(key));
+	  operation.mutable_status()->set_code(protos::kv::Ok);
+	  break;
+	}
+	case Operation::kPut:
+	  if (operation.put().args().key().empty()) {
+		operation.mutable_status()->set_code(protos::kv::InvalidOperation);
+		operation.mutable_status()->set_info("key is empty");
+		break;
+	  }
+	  key_value_state_.mutable_data()->at(operation.put().args().key()) = operation.put().args().value();
+	  operation.mutable_status()->set_code(protos::kv::Ok);
+	  break;
+	default: {
+	  operation.mutable_status()->set_code(protos::kv::InvalidOperation);
+	  operation.mutable_status()->set_info("operation data not set");
+	  break;
+	}
+  }
+
+  {
+	std::unique_lock lock(*lock_);
+	if (ongoing_transactions_.contains(entry.index())) {
+	  auto operation_result = ongoing_transactions_[entry.index()];
+	  operation_result->set_value(operation);
+	  ongoing_transactions_.erase(entry.index());
+	}
+	last_included_index_ = entry.index();
+  }
+}
+
+void KeyValueService::updateSnapshot() {
+  if (!raft_settings_->persistence_settings.has_value())
+	throw std::runtime_error("can't update snapshot when snapshots are not enabled");
+
+  std::ofstream temp_file = {};
+  temp_file.open("~" + raft_settings_->persistence_settings->snapshot_file);
+  key_value_state_.SerializeToOstream(&temp_file);
+  temp_file.close();
+
+  std::ofstream real_file = {};
+  temp_file
+	  .open(raft_settings_->persistence_settings->snapshot_file); // probably faster to serialize once, but benchmark
+  key_value_state_.SerializeToOstream(&temp_file);
+  temp_file.close();
+
+  raft_server_->snapshot(last_included_index_);
 }
 }// namespace flashpoint::keyvalue

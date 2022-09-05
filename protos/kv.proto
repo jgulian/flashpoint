@@ -67,6 +67,6 @@ message Operation {
   }
 }
 
-message State {
+message KeyValueState {
   map<string, bytes> data = 1;
 }
