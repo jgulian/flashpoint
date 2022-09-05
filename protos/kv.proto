@@ -12,16 +12,7 @@ enum Code {
   Error = 1;
   InvalidOperation = 2;
   KeyNotFound = 3;
-}
-
-message Status {
-  Code code = 1;
-  string info = 2;
-}
-
-message PutArgs {
-  string key = 1;
-  bytes value = 2;
+  UnexpectedValue = 4;
 }
 
 message GetArgs {
@@ -37,8 +28,33 @@ message GetOperation {
   GetReply reply = 2;
 }
 
+message PutArgs {
+  string key = 1;
+  bytes value = 2;
+}
+
 message PutOperation {
   PutArgs args = 1;
+}
+
+message CasArgs {
+  string key = 1;
+  bytes expected_value = 2;
+  bytes actual_value = 3;
+}
+
+message CasReply {
+  optional bytes actual_value = 3;
+}
+
+message CasOperation {
+  CasArgs args = 1;
+  CasReply reply = 2;
+}
+
+message Status {
+  Code code = 1;
+  string info = 2;
 }
 
 message Operation {
@@ -47,6 +63,7 @@ message Operation {
   oneof data {
     GetOperation get = 2;
     PutOperation put = 3;
+    CasOperation cas = 4;
   }
 }
 
