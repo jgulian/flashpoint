@@ -20,7 +20,7 @@ grpc::Status KeyValueServer::Put(::grpc::ServerContext *context, const ::protos:
   return grpc::Status::OK;
 }
 
-KeyValueService::KeyValueService(const std::string &config_file) {
+KeyValueService::KeyValueService(const std::string &config_file) : last_included_index_(0) {
   auto config = YAML::LoadFile(config_file);
   if (!config["raft_config"] || !config["raft_config"].IsMap() || !config["me"] || !config["host_address"])
 	throw std::runtime_error("config file not formatted correctly.");
@@ -62,7 +62,8 @@ KeyValueService::KeyValueService(const std::string &config_file) {
 		|| !persistence_config["snapshot_file"])
 	  throw std::runtime_error("config file not formatted correctly.");
 
-	std::cout << "persistence enabled" << std::endl;
+	util::GetLogger()->log("persistence enabled");
+	raft_settings_->persistence_settings.emplace();
 	raft_settings_->persistence_settings.value().snapshot_file = persistence_config["snapshot_file"].as<std::string>();
 	raft_settings_->persistence_settings.value().persistent_file =
 		persistence_config["persistent_file"].as<std::string>();
@@ -92,12 +93,15 @@ bool KeyValueService::update() {
 	auto recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
 	bool needs_snapshot = false;
 	while (recent_persist.has_value()) {
+	  util::GetLogger()->log("recent persist %u < %u",
+							 raft_settings_->persistence_settings->persistence_threshold,
+							 recent_persist.value());
 	  needs_snapshot |= raft_settings_->persistence_settings->persistence_threshold < recent_persist.value();
 	  recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
 	}
 
 	if (needs_snapshot)
-	  updateSnapshot();
+	  UpdateSnapshot();
   }
   return true;
 }
@@ -144,7 +148,7 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
 		operation.mutable_status()->set_info("key is empty");
 		break;
 	  }
-	  key_value_state_.mutable_data()->at(operation.put().args().key()) = operation.put().args().value();
+	  (*key_value_state_.mutable_data())[operation.put().args().key()] = operation.put().args().value();
 	  operation.mutable_status()->set_code(protos::kv::Ok);
 	  break;
 	default: {
@@ -165,21 +169,32 @@ void KeyValueService::finish(const protos::raft::LogEntry &entry) {
   }
 }
 
-void KeyValueService::updateSnapshot() {
+bool KeyValueService::UpdateSnapshot() {
+  util::GetLogger()->msg(util::LogLevel::DEBUG, "Starting snapshot");
   if (!raft_settings_->persistence_settings.has_value())
 	throw std::runtime_error("can't update snapshot when snapshots are not enabled");
 
-  std::ofstream temp_file = {};
-  temp_file.open("~" + raft_settings_->persistence_settings->snapshot_file);
+  auto temp_file_name = "~" + raft_settings_->persistence_settings->snapshot_file;
+  // TODO: use lock
+  if (std::filesystem::exists(temp_file_name))
+	return false;
+  util::GetLogger()->msg(util::LogLevel::DEBUG, "No previous snapshot");
+
+  //TODO: this file stuff should probably be moved into raft since InstallSnapshot is in raft and does the same things.
+  std::ofstream temp_file(temp_file_name);
   key_value_state_.SerializeToOstream(&temp_file);
   temp_file.close();
 
-  std::ofstream real_file = {};
-  temp_file
-	  .open(raft_settings_->persistence_settings->snapshot_file); // probably faster to serialize once, but benchmark
-  key_value_state_.SerializeToOstream(&temp_file);
-  temp_file.close();
+  util::GetLogger()->msg(util::LogLevel::DEBUG, "here1");
 
-  raft_server_->snapshot(last_included_index_);
+  std::ifstream temp_file_read(temp_file_name);
+  std::ofstream real_file(raft_settings_->persistence_settings->snapshot_file);
+  real_file << temp_file_read.rdbuf();
+  std::remove(temp_file_name.c_str());
+
+  util::GetLogger()->msg(util::LogLevel::DEBUG, "here2");
+
+  util::GetLogger()->log("starting a new snapshot");
+  return raft_server_->snapshot(last_included_index_);
 }
 }// namespace flashpoint::keyvalue

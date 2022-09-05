@@ -7,10 +7,11 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <thread>
+
+#include "util/concurrent_queue.hpp"
 
 namespace flashpoint::util {
-
-constexpr unsigned int log_size_limit = 30;
 
 enum class LogLevel {
   FATAL = 5,
@@ -65,27 +66,20 @@ class Logger {
 };
 
 class SimpleLogger : public Logger {
+ private:
+  bool supports_colored_text_ = false;
+  ConcurrentQueue<std::string> queue_;
+  std::unique_ptr<std::thread> thread_;
+  std::unique_ptr<std::atomic<bool>> running_ = std::make_unique<std::atomic<bool>>(false);
+
  public:
   void msg(LogLevel log_level, const std::string &message) override;
   bool worker() override;
-
- private:
-  bool supports_colored_text_ = true;
+  bool Kill();
 };
 
-class ManualLogger : public Logger {
- public:
-  void msg(LogLevel log_level, const std::string &message) override;
-  bool worker() override;
-
- private:
-  std::atomic<bool> working_ = false;
-  std::mutex lock_ = {};
-  std::atomic<unsigned int> size = 0;
-  std::queue<std::string> queue_ = {};
-};
-
-static std::unique_ptr<Logger> logger = std::make_unique<ManualLogger>();
+void SetLogger(std::shared_ptr<Logger> logger);
+std::shared_ptr<Logger> GetLogger();
 
 }// namespace flashpoint::util
 

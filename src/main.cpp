@@ -9,6 +9,8 @@ using namespace flashpoint;
 
 void setup_globals() {
   util::LoadEnvironmentVariables();
+  util::SetLogger(std::make_shared<util::SimpleLogger>());
+  util::GetLogger()->worker();
 }
 
 int main(int argc, char **argv) {
@@ -31,14 +33,16 @@ int main(int argc, char **argv) {
   }
 
   if (*get) {
-    cmd::getCmd(*get, get_args);
+	cmd::getCmd(*get, get_args);
   } else if (*put) {
-    cmd::putCmd(*put, put_args);
+	cmd::putCmd(*put, put_args);
   } else if (*start) {
-    cmd::startCmd(*start, start_args);
+	cmd::startCmd(*start, start_args);
   } else {
-    std::cout << app.help() << std::endl;
+	std::cout << app.help() << std::endl;
   }
 
+  auto logger = std::reinterpret_pointer_cast<util::SimpleLogger>(util::GetLogger());
+  logger->Kill();
   return 0;
 }

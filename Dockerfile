@@ -1,4 +1,4 @@
-FROM alpine as flashpoint-base
+FROM alpine as flashpoint
 
 RUN apk add gcc g++ cmake make git
 RUN apk add linux-headers
@@ -23,6 +23,9 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_MAKE_PROGRAM=make -B cmake-build-re
 RUN cmake --build cmake-build-release --target flashpoint -j 12
 RUN cmake --build cmake-build-release --target flashpoint_test -j 12
 
+WORKDIR /build
+RUN mv /service/cmake-build-release/CMake-flashpoint .
+E
 
 FROM flashpoint-base as flashpoint
 RUN ls; echo; ls cmake-build-release

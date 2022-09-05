@@ -92,10 +92,13 @@ message InstallSnapshotRequest {
   uint32 term = 1;
   string leader_id = 2;
 
-  uint32 snapshot_id = 3;
-  uint32 chunk_offset = 4;
-  bytes chunk = 5;
-  bool last_chunk = 6;
+  uint64 last_included_index = 3;
+  uint32 last_included_term = 4;
+
+  uint32 snapshot_id = 5;
+  int32 chunk_offset = 6;
+  bytes chunk = 7;
+  bool last_chunk = 8;
 }
 
 message InstallSnapshotResponse {
@@ -118,7 +121,7 @@ message RaftState {
     uint64 match_index = 2;
     uint64 next_index = 3;
     uint32 snapshot_id = 4;
-    uint32 chunk_offset = 5;
+    int32 chunk_offset = 5;
   }
 
   repeated PeerState peers = 1;

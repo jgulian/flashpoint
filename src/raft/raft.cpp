@@ -78,7 +78,8 @@ bool Raft::snapshot(LogIndex included_index) {
   snapshot->set_file_size(std::filesystem::file_size(file));
   snapshot->set_chunk_count((snapshot->file_size() / 1000000 / 256) + 1);
 
-  raft_state_->mutable_entries()->DeleteSubrange(0, static_cast<int>(included_index - raft_state_->log_offset()));
+  raft_state_->mutable_entries()->DeleteSubrange(0, static_cast<int>(included_index - raft_state_->log_offset()) + 1);
+  raft_state_->set_log_offset(included_index + 1);
 
   return true;
 }
@@ -113,7 +114,7 @@ void Raft::worker() {
 	if (std::chrono::system_clock::now() < current_time + sleep_for)
 	  std::this_thread::sleep_until(current_time + sleep_for);
 	else
-	  util::logger->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
+	  util::GetLogger()->msg(util::LogLevel::WARN, "raft worker sleep cycle missed");
   }
 }
 void Raft::updateLeaderElection() {
@@ -266,7 +267,12 @@ void Raft::updateFollower(const protos::raft::RaftState_PeerState &peer,
   grpc::ClientContext client_context = {};
   grpc::Status status;
 
-  if (peer.next_index() < raft_state_->log_offset()) {
+  std::cout << "which update should " << peer.peer().id() << " "
+			<< (peer.snapshot_id() != raft_state_->snapshot().snapshot_id()) << " cuz " << peer.snapshot_id() << " != "
+			<< raft_state_->snapshot().snapshot_id() << " or " << peer.chunk_offset() << " != "
+			<< raft_state_->snapshot().chunk_count() << std::endl;
+  if (peer.snapshot_id() != raft_state_->snapshot().snapshot_id()
+	  || peer.chunk_offset() != raft_state_->snapshot().chunk_count()) {
 	auto call = std::make_shared<
 		ExtendedRaftPeer::Call<protos::raft::InstallSnapshotRequest, protos::raft::InstallSnapshotResponse >>();
 	extended_peer->last_call = call;
@@ -274,6 +280,8 @@ void Raft::updateFollower(const protos::raft::RaftState_PeerState &peer,
 	call->request.set_term(raft_state_->current_term());
 	call->request.set_leader_id(settings_->me.id());
 
+	call->request.set_last_included_index(raft_state_->snapshot().last_included_index());
+	call->request.set_last_included_term(raft_state_->snapshot().last_included_term());
 	call->request.set_snapshot_id(raft_state_->snapshot().snapshot_id());
 	if (peer.snapshot_id() != raft_state_->snapshot().snapshot_id())
 	  call->request.set_chunk_offset(0);
@@ -444,6 +452,8 @@ grpc::Status Raft::AppendEntries(::grpc::ServerContext *context, const ::protos:
 	raft_state_->set_current_term(request->term());
 	leader_ = request->leader_id();
 	role_ = FOLLOWER;
+  } else if (leader_ != request->leader_id()) {
+	leader_ = request->leader_id();
   }
 
   auto last_log_index = raft_state_->log_size() - 1;
@@ -523,6 +533,50 @@ grpc::Status Raft::InstallSnapshot(::grpc::ServerContext *context,
 								   const ::protos::raft::InstallSnapshotRequest *request,
 								   ::protos::raft::InstallSnapshotResponse *response) {
   std::lock_guard<std::mutex> lock_guard(*lock_);
+  std::cout << "started install snapshot" << std::endl;
+
+  response->set_term(raft_state_->current_term());
+
+  if (request->term() < raft_state_->current_term()) {
+	response->set_leader_id(leader_);
+	return grpc::Status::OK;
+  } else if (raft_state_->current_term() < request->term()) {
+	raft_state_->set_current_term(request->term());
+	leader_ = request->leader_id();
+	role_ = FOLLOWER;
+  } else if (leader_ != request->leader_id()) {
+	leader_ = request->leader_id();
+  }
+
+  auto temp_file_name = "~" + settings_->persistence_settings->snapshot_file;
+  if (request->chunk_offset() == 0) {
+	if (std::filesystem::exists(temp_file_name))
+	  std::remove(temp_file_name.c_str());
+  }
+
+  std::ofstream temp_file(temp_file_name);
+  temp_file.seekp(static_cast<long long>(request->chunk_offset() * SnapshotChunkSize));
+  temp_file << request->chunk();
+
+  std::cout << "is last chunk " << request->last_chunk() << std::endl;
+
+  if (request->last_chunk()) {
+	std::ifstream temp_file_read(temp_file_name);
+	std::ofstream real_file(settings_->persistence_settings->snapshot_file);
+	real_file << temp_file_read.rdbuf();
+	std::remove(temp_file_name.c_str());
+
+	auto snapshot = raft_state_->mutable_snapshot();
+	snapshot->set_snapshot_id(request->snapshot_id());
+	snapshot->set_last_included_index(request->last_included_index());
+	snapshot->set_last_included_term(request->last_included_term());
+	snapshot->set_file_size(request->chunk_offset() * SnapshotChunkSize + request->chunk().size());
+	snapshot->set_chunk_count(request->chunk_offset() + 1);
+
+	raft_state_->mutable_entries()
+		->DeleteSubrange(0, static_cast<int>(request->last_included_index() - raft_state_->log_offset()) + 1);
+	raft_state_->set_log_offset(request->last_included_index() + 1);
+  }
 
   persist();
   return grpc::Status::OK;

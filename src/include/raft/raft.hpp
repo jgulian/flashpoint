@@ -40,16 +40,19 @@ constexpr auto ElectionTimeout = 1000ms;
 constexpr auto MinSleepTime = 100ms;
 constexpr auto MaxSleepTime = 500ms;
 
-const unsigned long long SnapshotChunkSize = 64 * 1000 * 1000;
+const unsigned long long SnapshotChunkSize = 256; //64 * 1000 * 1000;
 
 constexpr auto StartRequestBuffer = 100ms;
 constexpr auto StartRequestTimeout = 1000ms;
 
 struct PersistenceSettings {
+  PersistenceSettings() = default;
+  PersistenceSettings(PersistenceSettings &&other) noexcept = default;
+
   std::string snapshot_file;
   std::string persistent_file;
   util::ConcurrentQueue<unsigned long long> recent_persists = {};
-  unsigned long long persistence_threshold;
+  unsigned long long persistence_threshold = 0;
 };
 
 struct RaftSettings {

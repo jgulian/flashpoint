@@ -19,8 +19,10 @@ Alpha goals (Target: Oct 2)
 3. Tune election timing parameters
 4. ~~Support Log Compaction: persistence & snapshots~~
    1. Load from persistent state
+   2. Clean out previous snapshot
 5. Support sharding
 6. Review TODOs
+7. Use environment variables for things like logging color and log level
 
 Official Release goals (Target: Dec 22)
 

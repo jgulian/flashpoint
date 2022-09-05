@@ -74,7 +74,7 @@ class KeyValueService {
   OperationResult start(Operation &operation);
   void finish(const protos::raft::LogEntry &entry);
 
-  void updateSnapshot();
+  bool UpdateSnapshot();
 };
 
 }// namespace flashpoint::keyvalue
