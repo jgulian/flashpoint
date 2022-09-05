@@ -491,6 +491,11 @@ void Raft::persist() {
 
   std::ofstream persistent_file = {};
   persistent_file.open(raft_config_->persistent_file.value());
+  raft_state_->SerializeToOstream(&persistent_file);
+  auto written_count = persistent_file.tellp();
+  persistent_file.close();
+
+  raft_config_->on_persist(written_count);
 }
 
 RaftClient::RaftClient(PeerId me, const protos::raft::Config &config) : me_(std::move(me)) { config_.CopyFrom(config); }
