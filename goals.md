@@ -1,8 +1,6 @@
-Goals for today (Sep 5)
+Goals for the week (Sep 5)
 
-* CAS
-* Dockerfile
-* Update variable names
+* Update variable names to agree with `.clang-tidy`
 * Maybe callback KV
 
 Alpha goals (Target: Oct 2)

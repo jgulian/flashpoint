@@ -23,9 +23,9 @@ RUN cmake --build cmake-build-release --target flashpoint -j 12
 RUN cmake --build cmake-build-release --target flashpoint_test -j 12
 
 WORKDIR /build
-RUN ls /service/cmake-build-release
-RUN mv /service/cmake-build-release/CMakeFiles/flashpoint .
+RUN mv /service/cmake-build-release/flashpoint .
 ENTRYPOINT ./flashpoint
 
-FROM flashpoint-base as flashpoint-test
-ENTRYPOINT ./CmakeFiles/flashpoint_test
+FROM flashpoint as flashpoint-test
+RUN mv /service/cmake-build-release/flashpoint_test .
+ENTRYPOINT ./flashpoint_test
