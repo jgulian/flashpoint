@@ -7,14 +7,14 @@
 
 using namespace flashpoint;
 
-void setup_globals() {
+void SetupGlobals() {
   util::LoadEnvironmentVariables();
   util::SetLogger(std::make_shared<util::SimpleLogger>());
-  util::GetLogger()->worker();
+  util::GetLogger()->Worker();
 }
 
 int main(int argc, char **argv) {
-  setup_globals();
+  SetupGlobals();
 
   CLI::App app{"Flashpoint key/value db"};
 
@@ -23,10 +23,10 @@ int main(int argc, char **argv) {
   cmd::CasCommandArgs cas_args{};
   cmd::StartCommandArgs start_args{};
 
-  CLI::App *get = cmd::setupGetSubcommand(app, get_args);
-  CLI::App *put = cmd::setupPutSubcommand(app, put_args);
+  CLI::App *get = cmd::SetupGetSubcommand(app, get_args);
+  CLI::App *put = cmd::SetupPutSubcommand(app, put_args);
   CLI::App *cas = cmd::SetupCasSubcommand(app, cas_args);
-  CLI::App *start = cmd::setupStartSubcommand(app, start_args);
+  CLI::App *start = cmd::SetupStartSubcommand(app, start_args);
 
   try {
 	app.parse(argc, argv);
@@ -35,13 +35,13 @@ int main(int argc, char **argv) {
   }
 
   if (*get) {
-	cmd::getCmd(*get, get_args);
+	cmd::GetCmd(*get, get_args);
   } else if (*put) {
-	cmd::putCmd(*put, put_args);
+	cmd::PutCmd(*put, put_args);
   } else if (*cas) {
 	cmd::CasCmd(*cas, cas_args);
   } else if (*start) {
-	cmd::startCmd(*start, start_args);
+	cmd::StartCmd(*start, start_args);
   } else {
 	std::cout << app.help() << std::endl;
   }

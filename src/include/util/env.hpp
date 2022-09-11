@@ -7,7 +7,7 @@
 namespace flashpoint::util {
 
 struct EnvironmentVariables {
-  std::string log_level_;
+  std::string log_level;
 };
 
 

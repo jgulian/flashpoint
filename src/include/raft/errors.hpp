@@ -5,15 +5,15 @@
 #include <string>
 
 enum RaftExceptionType {
-  ProcessAlreadyRunning = 0,
-  ProcessNotRunning = 1,
-  IndexEarlierThanSnapshot = 2,
-  IndexOutOfLogBounds = 3,
-  AttemptedCommitOfUnknownEntry = 4,
-  AttemptedCommitOfSnapshot = 5,
-  ConfigNotInProposedConfig = 6,
-  ConfigNotNextConfig = 7,
-  NoSuchPeerWithId = 8,
+  PROCESS_ALREADY_RUNNING = 0,
+  PROCESS_NOT_RUNNING = 1,
+  INDEX_EARLIER_THAN_SNAPSHOT = 2,
+  INDEX_OUT_OF_LOG_BOUNDS = 3,
+  ATTEMPTED_COMMIT_OF_UNKNOWN_ENTRY = 4,
+  ATTEMPTED_COMMIT_OF_SNAPSHOT = 5,
+  CONFIG_NOT_IN_PROPOSED_CONFIG = 6,
+  CONFIG_NOT_NEXT_CONFIG = 7,
+  NO_SUCH_PEER_WITH_ID = 8,
 };
 
 class RaftException : std::exception {

@@ -7,6 +7,7 @@ target_sources(
 
         keyvalue/keyvalue.cpp
 
+        raft/client.cpp
         raft/errors.cpp
         raft/raft.cpp
 

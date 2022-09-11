@@ -2,8 +2,8 @@
 
 namespace flashpoint::util {
 
-void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
-  if (log_level == LogLevel::ALL) throw std::runtime_error("invalid log level all to log a message");
+void SimpleLogger::Msg(LogLevel log_level, const std::string &message) {
+  if (log_level == LogLevel::ALL) throw std::runtime_error("invalid Log level all to Log a message");
 
   if (log_level < log_level_) return;
 
@@ -13,7 +13,7 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
 	switch (log_level) {
 	  case LogLevel::FATAL: log_message = "\033[1;31m[FATAL]   \033[0m" + message + "\n";
 		break;
-	  case LogLevel::ERROR2: log_message = "\033[31m[ERROR]   \033[0m" + message + "\n";
+	  case LogLevel::ERR: log_message = "\033[31m[ERROR]   \033[0m" + message + "\n";
 		break;
 	  case LogLevel::WARN: log_message = "\033[33m[WARN]   \033[0m" + message + "\n";
 		break;
@@ -27,7 +27,7 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
 	switch (log_level) {
 	  case LogLevel::FATAL: log_message = "[FATAL] " + message + "\n";
 		break;
-	  case LogLevel::ERROR2: log_message = "[ERROR] " + message + "\n";
+	  case LogLevel::ERR: log_message = "[ERROR] " + message + "\n";
 		break;
 	  case LogLevel::WARN: log_message = "[WARN] " + message + "\n";
 		break;
@@ -42,11 +42,11 @@ void SimpleLogger::msg(LogLevel log_level, const std::string &message) {
   queue_.Push(log_message);
 }
 
-bool SimpleLogger::worker() {
-  if (!running_->load()) {
-	running_->store(true);
-	thread_ = std::make_unique<std::thread>([this]() {
-	  while (running_->load()) {
+bool SimpleLogger::Worker() {
+  if (!running_.load()) {
+	running_.store(true);
+	thread_ = std::thread([this]() {
+	  while (running_.load()) {
 		auto message = queue_.Pop();
 		while (message.has_value()) {
 		  std::cout << message.value();
@@ -61,9 +61,9 @@ bool SimpleLogger::worker() {
   }
 }
 bool SimpleLogger::Kill() {
-  if (running_->load()) {
-	running_->store(false);
-	thread_->join();
+  if (running_.load()) {
+	running_.store(false);
+	thread_.join();
 	return true;
   }
   return false;

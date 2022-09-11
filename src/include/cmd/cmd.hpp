@@ -40,15 +40,15 @@ struct StartCommandArgs {
   std::string snapshot_file;
 };
 
-CLI::App *setupGetSubcommand(CLI::App &app, GetCommandArgs &command_args);
-CLI::App *setupPutSubcommand(CLI::App &app, PutCommandArgs &command_args);
+CLI::App *SetupGetSubcommand(CLI::App &app, GetCommandArgs &command_args);
+CLI::App *SetupPutSubcommand(CLI::App &app, PutCommandArgs &command_args);
 CLI::App *SetupCasSubcommand(CLI::App &app, CasCommandArgs &command_args);
-CLI::App *setupStartSubcommand(CLI::App &app, StartCommandArgs &command_args);
+CLI::App *SetupStartSubcommand(CLI::App &app, StartCommandArgs &command_args);
 
-void getCmd(CLI::App &get, const GetCommandArgs &command_args);
-void putCmd(CLI::App &put, const PutCommandArgs &command_args);
+void GetCmd(CLI::App &get, const GetCommandArgs &command_args);
+void PutCmd(CLI::App &put, const PutCommandArgs &command_args);
 void CasCmd(CLI::App &cas, const CasCommandArgs &command_args);
-void startCmd(CLI::App &start, const StartCommandArgs &command_args);
+void StartCmd(CLI::App &start, const StartCommandArgs &command_args);
 
 }// namespace flashpoint::cmd
 

@@ -1,5 +1,5 @@
-#ifndef FLASHPOINT_RAFT_HPP
-#define FLASHPOINT_RAFT_HPP
+#ifndef FLASHPOINT_SRC_INCLUDE_RAFT_RAFT_HPP_
+#define FLASHPOINT_SRC_INCLUDE_RAFT_RAFT_HPP_
 
 #include <grpcpp/create_channel.h>
 
@@ -36,14 +36,14 @@ using RaftConnection = std::shared_ptr<protos::raft::Raft::StubInterface>;
 
 using namespace std::chrono_literals;
 
-constexpr auto ElectionTimeout = 1000ms;
-constexpr auto MinSleepTime = 100ms;
-constexpr auto MaxSleepTime = 500ms;
+constexpr auto kElectionTimeout = 1000ms;
+constexpr auto kMinSleepTime = 100ms;
+constexpr auto kMaxSleepTime = 500ms;
 
-const unsigned long long SnapshotChunkSize = 256; //64 * 1000 * 1000;
+const unsigned long long kSnapshotChunkSize = 256; //64 * 1000 * 1000;
 
-constexpr auto StartRequestBuffer = 100ms;
-constexpr auto StartRequestTimeout = 1000ms;
+constexpr auto kStartRequestBuffer = 100ms;
+constexpr auto kStartRequestTimeout = 1000ms;
 
 struct PersistenceSettings {
   PersistenceSettings() = default;
@@ -60,7 +60,7 @@ struct RaftSettings {
   std::function<void(protos::raft::LogEntry log_entry)> apply_command = [](const protos::raft::LogEntry &) {};
   std::function<void(protos::raft::LogEntry log_entry)> apply_config_update = [](const protos::raft::LogEntry &) {};
   protos::raft::Config starting_config = {};
-  std::shared_ptr<util::Random> random = std::make_shared<util::MTRandom>();
+  std::shared_ptr<util::Random> random = std::make_shared<util::MtRandom>();
   std::optional<PersistenceSettings> persistence_settings = std::nullopt;
 };
 
@@ -88,7 +88,7 @@ struct ExtendedRaftPeer {
 
  public:
   explicit ExtendedRaftPeer(std::shared_ptr<protos::raft::Raft::StubInterface> connection);
-  [[nodiscard]] bool active() const;
+  [[nodiscard]] bool Active() const;
 };
 
 class Raft : public protos::raft::Raft::Service {
@@ -121,72 +121,50 @@ class Raft : public protos::raft::Raft::Service {
  public:
   explicit Raft(std::shared_ptr<RaftSettings> config, bool use_persisted_state = false);
 
-  bool run();
+  bool Run();
 
-  bool kill();
+  bool Kill();
 
-  bool snapshot(LogIndex included_index);
+  bool Snapshot(LogIndex included_index);
 
  private:
-  void worker();
-
-  void updateLeaderElection();
-
-  void updateIndices();
-
-  void updateFollowers();
-
-  void updateFollower(const protos::raft::RaftState_PeerState &peer,
-                      const std::unique_ptr<ExtendedRaftPeer> &extended_peer);
-
-  [[nodiscard]] const protos::raft::LogEntry &atLogIndex(LogIndex index) const;
-
-  void commitEntries();
-
-  [[nodiscard]] bool checkAllConfigsAgreement(const std::list<PeerId> &agreers) const;
-
-  [[nodiscard]] std::list<PeerId> agreersForIndex(LogIndex index) const;
-
-  void fillWithChunk(protos::raft::InstallSnapshotRequest &request);
-
-  void registerNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config = false);
-
   grpc::Status Start(::grpc::ServerContext *context, const ::protos::raft::StartRequest *request,
-                     ::protos::raft::StartResponse *response) override;
+					 ::protos::raft::StartResponse *response) override;
   grpc::Status AppendEntries(::grpc::ServerContext *context, const ::protos::raft::AppendEntriesRequest *request,
-                             ::protos::raft::AppendEntriesResponse *response) override;
+							 ::protos::raft::AppendEntriesResponse *response) override;
   grpc::Status RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request,
-                           ::protos::raft::RequestVoteResponse *response) override;
+						   ::protos::raft::RequestVoteResponse *response) override;
   grpc::Status InstallSnapshot(::grpc::ServerContext *context, const ::protos::raft::InstallSnapshotRequest *request,
-                               ::protos::raft::InstallSnapshotResponse *response) override;
+							   ::protos::raft::InstallSnapshotResponse *response) override;
 
-  void persist();
-};
+  void Worker();
 
-class RaftClient {
- private:
-  PeerId me_;
-  protos::raft::Config config_ = {};
-  std::optional<std::pair<std::string, RaftConnection>> cached_connection_info_ = std::nullopt;
-  std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
+  void UpdateLeaderElection();
 
- public:
-  explicit RaftClient(PeerId me, const protos::raft::Config &config);
+  void UpdateIndices();
 
-  void updateConfig(const protos::raft::Config &config);
+  void UpdateFollowers();
 
-  LogIndex start(const std::string &command);
+  void UpdateFollower(const protos::raft::RaftState_PeerState &peer,
+					  const std::unique_ptr<ExtendedRaftPeer> &extended_peer);
 
-  LogIndex startConfig(const protos::raft::Config &config);
+  [[nodiscard]] const protos::raft::LogEntry &AtLogIndex(LogIndex index) const;
 
- private:
-  LogIndex doRequest(const protos::raft::StartRequest &request);
+  void CommitEntries();
 
-  void checkForCacheExistence(std::shared_lock<std::shared_mutex> &lock);
+  [[nodiscard]] bool CheckAllConfigsAgreement(const std::list<PeerId> &agreers) const;
 
-  void updateCache(std::shared_lock<std::shared_mutex> &lock, const std::string &leader_id);
+  [[nodiscard]] std::list<PeerId> AgreersForIndex(LogIndex index) const;
+
+  void FillWithChunk(protos::raft::InstallSnapshotRequest &request) const;
+
+  void RegisterNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config = false);
+
+  void Persist();
+
+  static bool HasAgreement(const protos::raft::Config &config, const std::list<PeerId> &agreers);
 };
 
 }// namespace flashpoint::raft
 
-#endif//FLASHPOINT_RAFT_HPP
+#endif//FLASHPOINT_SRC_INCLUDE_RAFT_RAFT_HPP_

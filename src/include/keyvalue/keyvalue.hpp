@@ -1,5 +1,5 @@
-#ifndef FLASHPOINT_KEYVALUE_HPP
-#define FLASHPOINT_KEYVALUE_HPP
+#ifndef FLASHPOINT_SRC_INCLUDE_KEYVALUE_KEYVALUE_HPP_
+#define FLASHPOINT_SRC_INCLUDE_KEYVALUE_KEYVALUE_HPP_
 
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
@@ -13,7 +13,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include "raft/raft.hpp"
+#include "raft/client.hpp"
 
 namespace flashpoint::keyvalue {
 using Operation = protos::kv::Operation;
@@ -61,26 +61,26 @@ class KeyValueService {
   grpc::ServerBuilder grpc_server_builder_;
   std::unique_ptr<grpc::Server> grpc_server_;
 
-  std::unique_ptr<std::shared_mutex> lock_ = std::make_unique<std::shared_mutex>();
+  std::shared_mutex lock_{};
 
  public:
   explicit KeyValueService(const std::string &config_file);
 
-  void run();
-  bool update();
-  void kill();
+  void Run();
+  bool Update();
+  void Kill();
 
   OperationResult Put(const std::string &key, const std::string &value);
   OperationResult Get(const std::string &key);
   OperationResult Cas(const std::string &key, const std::string &expected, const std::string &updated);
 
  private:
-  OperationResult start(Operation &operation);
-  void finish(const protos::raft::LogEntry &entry);
+  OperationResult Start(Operation &operation);
+  void Finish(const protos::raft::LogEntry &entry);
 
   bool UpdateSnapshot();
 };
 
 }// namespace flashpoint::keyvalue
 
-#endif//FLASHPOINT_KEYVALUE_HPP
+#endif//FLASHPOINT_SRC_INCLUDE_KEYVALUE_KEYVALUE_HPP_
