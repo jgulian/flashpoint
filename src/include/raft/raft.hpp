@@ -99,14 +99,13 @@ class Raft : public protos::raft::Raft::Service {
 	CANDIDATE,
   };
 
-  std::unique_ptr<std::thread> worker_function_ = nullptr;
-  std::unique_ptr<std::atomic<bool>> running_ = std::make_unique<std::atomic<bool>>(false);
-  std::unique_ptr<std::mutex> lock_ = std::make_unique<std::mutex>();
+  std::thread worker_function_;
+  std::atomic<bool> running_ = false;
+  std::shared_mutex lock_{};
 
-  std::shared_ptr<RaftSettings> settings_ = {};
-  std::unique_ptr<protos::raft::RaftState> raft_state_ = std::make_unique<protos::raft::RaftState>();
-  std::unique_ptr<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>> extended_peers_ =
-	  std::make_unique<std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>>>();
+  std::shared_ptr<RaftSettings> settings_{};
+  protos::raft::RaftState raft_state_ = protos::raft::RaftState();
+  std::map<PeerId, std::unique_ptr<ExtendedRaftPeer>> extended_peers_{};
 
   // Volatile State
   LogIndex commit_index_ = 0, last_applied_ = 0;
@@ -161,6 +160,8 @@ class Raft : public protos::raft::Raft::Service {
   void RegisterNewConfig(LogIndex log_index, const protos::raft::Config &config, bool base_config = false);
 
   void Persist();
+
+  protos::raft::Peer &Me();
 
   static bool HasAgreement(const protos::raft::Config &config, const std::list<PeerId> &agreers);
 };
