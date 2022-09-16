@@ -129,6 +129,7 @@ class Raft : public protos::raft::Raft::Service {
  private:
   grpc::Status Start(::grpc::ServerContext *context, const ::protos::raft::StartRequest *request,
 					 ::protos::raft::StartResponse *response) override;
+
   grpc::Status AppendEntries(::grpc::ServerContext *context, const ::protos::raft::AppendEntriesRequest *request,
 							 ::protos::raft::AppendEntriesResponse *response) override;
   grpc::Status RequestVote(::grpc::ServerContext *context, const ::protos::raft::RequestVoteRequest *request,
@@ -161,7 +162,7 @@ class Raft : public protos::raft::Raft::Service {
 
   void Persist();
 
-  protos::raft::Peer &Me();
+  protos::raft::RaftState_PeerState &Me();
 
   static bool HasAgreement(const protos::raft::Config &config, const std::list<PeerId> &agreers);
 };
