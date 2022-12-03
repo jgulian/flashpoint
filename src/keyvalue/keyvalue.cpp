@@ -98,8 +98,8 @@ void KeyValueService::Run() {
 }
 bool KeyValueService::Update() {
   if (raft_settings_->persistence_settings.has_value()) {
-	auto recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();
-	bool needs_snapshot = false;
+	auto recent_persist = raft_settings_->persistence_settings->recent_persists.TryPop();
+    bool needs_snapshot = false;
 	while (recent_persist.has_value()) {
 	  needs_snapshot |= raft_settings_->persistence_settings->persistence_threshold < recent_persist.value();
 	  recent_persist = raft_settings_->persistence_settings->recent_persists.Pop();

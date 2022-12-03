@@ -47,12 +47,7 @@ bool SimpleLogger::Worker() {
 	running_.store(true);
 	thread_ = std::thread([this]() {
 	  while (running_.load()) {
-		auto message = queue_.Pop();
-		while (message.has_value()) {
-		  std::cout << message.value();
-		  message = queue_.Pop();
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::cout << queue_.Pop().value_or("");
 	  }
 	});
 	return true;
@@ -62,8 +57,9 @@ bool SimpleLogger::Worker() {
 }
 bool SimpleLogger::Kill() {
   if (running_.load()) {
-	running_.store(false);
-	thread_.join();
+    running_.store(false);
+    queue_.Close();
+    thread_.join();
 	return true;
   }
   return false;

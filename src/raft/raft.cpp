@@ -79,6 +79,7 @@ void Raft::Worker() {
 
 	{
 	  std::lock_guard<std::shared_mutex> lock_guard(lock_);
+      util::GetLogger()->Log("any workers?");
 
 	  if (role_ == FOLLOWER) {
 		if (std::chrono::system_clock::now() - last_heartbeat_ > kElectionTimeout) {
@@ -87,10 +88,12 @@ void Raft::Worker() {
 		  sent_vote_requests_ = false;
 		}
 	  } else if (role_ == CANDIDATE) {
-		last_heartbeat_ = std::chrono::system_clock::now();
+        util::GetLogger()->Log("any leaders?");
+        last_heartbeat_ = std::chrono::system_clock::now();
 		UpdateLeaderElection();
 	  } else if (role_ == LEADER) {
-		last_heartbeat_ = std::chrono::system_clock::now();
+        util::GetLogger()->Log("i am the leader");
+        last_heartbeat_ = std::chrono::system_clock::now();
 		UpdateIndices();
 		UpdateFollowers();
 	  }
