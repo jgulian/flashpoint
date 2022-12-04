@@ -16,7 +16,6 @@ class ConcurrentQueue {
 
  public:
   ConcurrentQueue() = default;
-  ConcurrentQueue(ConcurrentQueue &&other) noexcept = default;
 
   void Push(const T &data) {
     std::unique_lock<std::mutex> lock(*lock_);
